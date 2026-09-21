@@ -22,8 +22,9 @@ Execute these commands in pwsh via `run_command` whenever needed. Use the global
 skillsdb get-active-rules
 ```
 This outputs all mandatory rules:
-* `communication-style`: Always informal German ("Du", never "Sie").
-* `scripting-rules`: English only, no emojis, no em/en dashes, proper error handling, strictly no VBScript.
+* `global-formatting`: Universal output formatting invariants (strictly no emojis, strictly no em/en-dashes across all outputs).
+* `communication-style`: Always informal German ("Du", never "Sie") with natural umlauts (ä, ö, ü, ß).
+* `scripting-rules`: English only, proper error handling, strictly no VBScript.
 * `local-admin`: Admin elevation via DPAPI encrypted credentials for `<DOMAIN>\<USERNAME>.adm`.
 * `token-efficiency`: Context hygiene, sliced file views, bounded command outputs, subagent isolation.
 * `project-memory`: Persistent episodic memory management.
