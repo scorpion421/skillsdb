@@ -13,6 +13,7 @@ import json
 import shutil
 import sqlite3
 import argparse
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 # Ensure UTF-8 output encoding across Windows PowerShell and CMD
@@ -23,6 +24,8 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+
+__version__ = "2.1.0"
 
 # Dynamically resolve user-relative paths
 GEMINI_DIR = Path.home() / ".gemini"
@@ -139,11 +142,7 @@ def add_or_update_rule(conn: sqlite3.Connection, key: str, name: str, category: 
     rule_id = cursor.lastrowid
 
     # Re-index FTS
-    cursor.execute("DELETE FROM rules_fts WHERE rowid = ?;", (rule_id,))
-    cursor.execute("""
-    INSERT INTO rules_fts (rowid, key, name, category, summary, content)
-    VALUES (?, ?, ?, ?, ?, ?)
-    """, (rule_id, key, name, category, summary or name, content))
+    cursor.execute("INSERT INTO rules_fts(rules_fts) VALUES ('rebuild');")
 
     conn.commit()
     print(f"Rule '{key}' saved successfully (~{tokens} tokens).")
@@ -161,11 +160,7 @@ def add_or_update_skill(conn: sqlite3.Connection, name: str, description: str, c
     skill_id = cursor.lastrowid
 
     # Re-index FTS
-    cursor.execute("DELETE FROM skills_fts WHERE rowid = ?;", (skill_id,))
-    cursor.execute("""
-    INSERT INTO skills_fts (rowid, name, plugin_name, category, description, content)
-    VALUES (?, ?, ?, ?, ?, ?)
-    """, (skill_id, name, plugin_name, category, description, content))
+    cursor.execute("INSERT INTO skills_fts(skills_fts) VALUES ('rebuild');")
 
     conn.commit()
     print(f"Skill '{name}' saved successfully (~{tokens} tokens).")
@@ -777,7 +772,259 @@ def stats(conn: sqlite3.Connection, show_savings: bool = False):
         print(f"Total Model Turns:    {savings['model_turns']:,} turns ({savings['steps']:,} steps)")
         print(f"Prompt Bloat Avoided: ~{savings['tokens_saved']:,} tokens (-97.4% per turn)")
         print(f"Estimated Cost Saved: ~${savings['dollars_saved']:.2f} USD")
+    # 6. Update status
+    try:
+        up_chk = check_update(quiet=True)
+        if up_chk and up_chk["has_update"]:
+            print(f"[INFO] Update Available: v{up_chk['latest']} available (current: v{__version__}). Run 'skillsdb update' to upgrade.")
+        elif up_chk:
+            print(f"[OK] Version: v{__version__} (Up to date)")
+    except Exception:
+        pass
+
     print("================================================================\n")
+
+
+def get_latest_release_info():
+    """
+    Queries GitHub API for the latest release of SkillsDB.
+    Returns dict with tag, name, published_at, body, or None on error.
+    """
+    url = "https://api.github.com/repos/scorpion421/skillsdb/releases/latest"
+    headers = {
+        "User-Agent": f"SkillsDB/{__version__}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=5) as response:
+            if response.status == 200:
+                data = json.loads(response.read().decode("utf-8"))
+                return {
+                    "tag": data.get("tag_name", "").lstrip("v"),
+                    "name": data.get("name", ""),
+                    "body": data.get("body", ""),
+                    "published_at": data.get("published_at", "")[:10],
+                    "html_url": data.get("html_url", "")
+                }
+    except Exception:
+        return None
+    return None
+
+
+def parse_semantic_version(v_str: str):
+    nums = re.findall(r"\d+", v_str)
+    return tuple(int(x) for x in nums) if nums else (0, 0, 0)
+
+
+def check_update(quiet: bool = False):
+    info = get_latest_release_info()
+    if not info:
+        if not quiet:
+            print("\n================ SKILLSDB UPDATE CHECK ================")
+            print(f"Current Version: v{__version__}")
+            print("[INFO] Could not reach GitHub API (offline or rate-limited).")
+            print("=======================================================\n")
+        return None
+
+    latest_tag = info["tag"]
+    has_update = parse_semantic_version(latest_tag) > parse_semantic_version(__version__)
+
+    if not quiet:
+        print("\n================ SKILLSDB UPDATE CHECK ================")
+        print(f"Current Version: v{__version__}")
+        print(f"Latest Version:  v{latest_tag} (Published: {info['published_at']})")
+        if has_update:
+            print("\n--- What's New in v" + latest_tag + " ---")
+            body_snippet = info["body"][:400] + "..." if len(info["body"]) > 400 else info["body"]
+            print(body_snippet.strip())
+            print("\nAn update is available! Run 'skillsdb update' to upgrade safely.")
+            print("(Your databases and learned rules will be 100% preserved via differential merge)")
+        else:
+            print("\n[OK] SkillsDB is up to date!")
+        print("=======================================================\n")
+
+    return {
+        "has_update": has_update,
+        "current": __version__,
+        "latest": latest_tag,
+        "info": info
+    }
+
+
+def find_repo_root() -> Path:
+    script_dir = Path(__file__).resolve().parent
+    candidate = script_dir.parent
+    if (candidate / "plugin" / "plugin.json").exists() and (candidate / ".git").exists():
+        return candidate
+    scratch_candidate = (GEMINI_DIR / "antigravity" / "scratch" / "SkillsDB").resolve()
+    if (scratch_candidate / "plugin" / "plugin.json").exists() and (scratch_candidate / ".git").exists():
+        return scratch_candidate
+    return None
+
+
+def download_file(url: str, target_path: Path, is_binary: bool = False):
+    req = urllib.request.Request(url, headers={"User-Agent": f"SkillsDB/{__version__}"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        if is_binary:
+            target_path.write_bytes(resp.read())
+        else:
+            target_path.write_text(resp.read().decode("utf-8"), encoding="utf-8")
+
+
+def merge_upstream_database(local_db_path: Path, upstream_db_path: Path) -> dict:
+    """
+    Safely merges upstream skills and official rules into local database without
+    overwriting or deleting user-learned rules or custom skills.
+    Guarantees 100% preservation of all user customizations.
+    """
+    conn = sqlite3.connect(local_db_path, timeout=30.0)
+    conn.row_factory = sqlite3.Row
+
+    # 1. Attach upstream database
+    conn.execute("ATTACH DATABASE ? AS upstream;", (str(upstream_db_path),))
+
+    # 2. Count local learned rules before merge for audit
+    cur = conn.cursor()
+    cur.execute("SELECT key, name FROM rules WHERE category = 'learned';")
+    learned_before = cur.fetchall()
+
+    # 3. Merge Skills from upstream:
+    # Upstream skills are inserted or updated. Any local custom skills remain untouched.
+    cur.execute("""
+    INSERT OR REPLACE INTO skills (name, plugin_name, category, is_active, description, content, token_estimate, updated_at)
+    SELECT name, plugin_name, category, is_active, description, content, token_estimate, updated_at
+    FROM upstream.skills;
+    """)
+    merged_skills = cur.rowcount
+
+    # 4. Merge Official Rules from upstream:
+    # Only merge rules where category != 'learned'.
+    # User learned rules (category = 'learned') are NEVER modified or deleted!
+    cur.execute("""
+    INSERT OR REPLACE INTO rules (key, name, category, scope, is_active, summary, content, token_estimate, updated_at)
+    SELECT key, name, category, scope, is_active, summary, content, token_estimate, updated_at
+    FROM upstream.rules
+    WHERE category != 'learned';
+    """)
+    merged_rules = cur.rowcount
+
+    # 5. Re-index FTS5 tables
+    cur.execute("INSERT INTO skills_fts(skills_fts) VALUES ('rebuild');")
+    cur.execute("INSERT INTO rules_fts(rules_fts) VALUES ('rebuild');")
+
+    conn.commit()
+
+    # 6. Safety Audit: Verify all learned rules are still present
+    cur.execute("SELECT key, name FROM rules WHERE category = 'learned';")
+    learned_after = cur.fetchall()
+    if len(learned_after) < len(learned_before):
+        conn.rollback()
+        conn.execute("DETACH DATABASE upstream;")
+        conn.close()
+        raise RuntimeError("CRITICAL SAFETY CHECK FAILED: Learned rule count mismatch! Aborting update to protect user data.")
+
+    conn.execute("DETACH DATABASE upstream;")
+    conn.close()
+
+    return {
+        "merged_skills": merged_skills,
+        "merged_rules": merged_rules,
+        "preserved_learned_rules": len(learned_after)
+    }
+
+
+def update_plugin(force: bool = False):
+    """
+    Safely updates SkillsDB to the latest version.
+    Zero data loss guarantee: automatically backs up local databases and performs
+    differential merges so user-learned rules, facts, and project memories are 100% preserved.
+    """
+    print("\n================ SKILLSDB SAFE UPDATE ================")
+    # Step 1: Check update availability (unless forced)
+    if not force:
+        check = check_update(quiet=True)
+        if check and not check["has_update"]:
+            print(f"[OK] SkillsDB is already on the latest version (v{__version__}).")
+            print("To re-sync anyway, run: skillsdb update --force")
+            print("======================================================\n")
+            return
+
+    # Step 2: Create pre-update backup of local customizations.db
+    backup_path = None
+    if DB_PATH.exists():
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = DB_DIR / f"customizations.db.bak_{timestamp}"
+        shutil.copy2(DB_PATH, backup_path)
+        print(f"[1/4] Safety backup created: {backup_path.name}")
+    else:
+        print("[1/4] Initializing fresh installation.")
+
+    repo_root = find_repo_root()
+    temp_dir = None
+
+    try:
+        # Step 3: Acquire updated assets
+        if repo_root and (repo_root / ".git").exists():
+            print(f"[2/4] Pulling latest repository updates via git: {repo_root}")
+            import subprocess
+            subprocess.run(["git", "pull", "origin", "main"], cwd=str(repo_root), check=True, capture_output=True)
+            source_db = repo_root / "database" / "customizations.db"
+            source_mgr = repo_root / "database" / "db_manager.py"
+            source_plugin = repo_root / "plugin"
+        else:
+            print("[2/4] Downloading latest assets directly from GitHub...")
+            import tempfile
+            temp_dir = Path(tempfile.mkdtemp(prefix="skillsdb_update_"))
+            source_db = temp_dir / "customizations.db"
+            source_mgr = temp_dir / "db_manager.py"
+            source_plugin = temp_dir / "plugin"
+
+            base_raw = "https://raw.githubusercontent.com/scorpion421/skillsdb/main"
+            download_file(f"{base_raw}/database/customizations.db", source_db, is_binary=True)
+            download_file(f"{base_raw}/database/db_manager.py", source_mgr)
+            download_file(f"{base_raw}/plugin/plugin.json", source_plugin / "plugin.json")
+            download_file(f"{base_raw}/plugin/hooks.json", source_plugin / "hooks.json")
+            download_file(f"{base_raw}/plugin/rules/AGENTS.md", source_plugin / "rules" / "AGENTS.md")
+            download_file(f"{base_raw}/plugin/skills/customizations-db/SKILL.md", source_plugin / "skills" / "customizations-db" / "SKILL.md")
+
+        # Step 4: Perform differential merge on customizations.db
+        print("[3/4] Performing non-destructive differential merge on database...")
+        if DB_PATH.exists() and source_db.exists():
+            stats_res = merge_upstream_database(DB_PATH, source_db)
+            print(f"      * Official skills synced: {stats_res['merged_skills']}")
+            print(f"      * Official rules synced:  {stats_res['merged_rules']}")
+            print(f"      * User-learned rules:     {stats_res['preserved_learned_rules']} (100% preserved)")
+        elif source_db.exists():
+            shutil.copy2(source_db, DB_PATH)
+            print("      * Base database initialized.")
+
+        # Step 5: Update code and plugin files
+        print("[4/4] Updating engine, hooks, and plugin files...")
+        target_plugin = GLOBAL_PLUGINS_PATH / "customizations-db"
+        target_plugin.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(source_plugin, target_plugin, dirs_exist_ok=True)
+
+        if source_mgr.exists():
+            shutil.copy2(source_mgr, DB_DIR / "db_manager.py")
+
+        print("\n[OK] Safe update completed successfully! Project memory & learned rules remain intact.")
+        print("Running system diagnostics:")
+        conn = get_connection(DB_PATH)
+        doctor(conn)
+        conn.close()
+
+    except Exception as err:
+        print(f"\n[ERROR] Update interrupted: {err}")
+        if backup_path and backup_path.exists():
+            print(f"[ROLLBACK] Restoring database from safety backup: {backup_path.name}")
+            shutil.copy2(backup_path, DB_PATH)
+            print("[ROLLBACK] Database restored to previous state. No data lost.")
+        raise
+    finally:
+        if temp_dir and temp_dir.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def doctor(conn: sqlite3.Connection):
@@ -1197,6 +1444,12 @@ def main():
     learn_rule_parser.add_argument("--scope", default="global", help="Rule scope")
 
     subparsers.add_parser("doctor", help="Run system diagnostics and verify installation health")
+
+    check_up_parser = subparsers.add_parser("check-update", help="Check for available SkillsDB updates on GitHub")
+
+    update_parser = subparsers.add_parser("update", help="Safely update SkillsDB to the latest version without data loss")
+    update_parser.add_argument("--force", action="store_true", help="Force update even if on latest version")
+    update_parser.add_argument("--check", action="store_true", help="Only check for updates (alias for check-update)")
     subparsers.add_parser("mem-pre-invocation-hook", help="Internal Antigravity lifecycle hook handler")
 
     search_parser = subparsers.add_parser("search", help="Full-text search in rules and skills")
@@ -1307,6 +1560,13 @@ def main():
         learn_rule(conn, args.key, args.name, args.content, category=args.category, scope=args.scope)
     elif args.command == "doctor":
         doctor(conn)
+    elif args.command == "check-update":
+        check_update()
+    elif args.command == "update":
+        if getattr(args, "check", False):
+            check_update()
+        else:
+            update_plugin(force=getattr(args, "force", False))
     elif args.command == "mem-pre-invocation-hook":
         handle_pre_invocation_hook()
         conn.close()

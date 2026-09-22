@@ -139,6 +139,82 @@ print("Hello World")
         self.assertIn("Native D3D11 VP", msg)
         self.assertIn("Release v1.0 deployed", msg)
 
+    def test_differential_merge_preserves_user_data(self):
+        # 1. Create a simulated local database with user-learned rules & custom skill
+        local_db_path = self.test_db_dir / "sim_local.db"
+        lconn = db_manager.get_connection(local_db_path)
+        db_manager.init_db(lconn)
+        db_manager.add_or_update_rule(lconn, "local-admin", "Local Admin", "security", "Original admin rule")
+        db_manager.learn_rule(lconn, "user-custom-rule", "My Secret Rule", "Never expose port 22", category="learned")
+        
+        # Add custom user skill
+        lcur = lconn.cursor()
+        lcur.execute("""
+        INSERT INTO skills (name, plugin_name, category, is_active, description, content, token_estimate, updated_at)
+        VALUES ('user-private-skill', 'custom', 'workflow', 1, 'My custom private skill', 'Content of private skill', 20, '2026-09-22')
+        """)
+        lconn.commit()
+        lconn.close()
+
+        # 2. Create a simulated upstream database with updated official rules and skills
+        upstream_db_path = self.test_db_dir / "sim_upstream.db"
+        uconn = db_manager.get_connection(upstream_db_path)
+        db_manager.init_db(uconn)
+        db_manager.add_or_update_rule(uconn, "local-admin", "Local Admin", "security", "UPSTREAM UPDATED admin rule v2.1")
+        db_manager.add_or_update_rule(uconn, "new-official-rule", "New Official Rule", "general", "Brand new official rule")
+        
+        ucur = uconn.cursor()
+        ucur.execute("""
+        INSERT INTO skills (name, plugin_name, category, is_active, description, content, token_estimate, updated_at)
+        VALUES ('official-new-skill', 'core', 'workflow', 1, 'New official skill', 'Content of new official skill', 30, '2026-09-22')
+        """)
+        uconn.commit()
+        uconn.close()
+
+        # 3. Execute non-destructive differential merge
+        merge_result = db_manager.merge_upstream_database(local_db_path, upstream_db_path)
+
+        # 4. Verify results
+        vconn = db_manager.get_connection(local_db_path)
+        vcur = vconn.cursor()
+
+        # User learned rule must be 100% preserved
+        vcur.execute("SELECT * FROM rules WHERE key = 'user-custom-rule'")
+        learned_rule = vcur.fetchone()
+        self.assertIsNotNone(learned_rule)
+        self.assertEqual(learned_rule["content"], "Never expose port 22")
+        self.assertEqual(learned_rule["category"], "learned")
+
+        # Custom private skill must be 100% preserved
+        vcur.execute("SELECT * FROM skills WHERE name = 'user-private-skill'")
+        priv_skill = vcur.fetchone()
+        self.assertIsNotNone(priv_skill)
+        self.assertEqual(priv_skill["content"], "Content of private skill")
+
+        # Official rule must be updated from upstream
+        vcur.execute("SELECT * FROM rules WHERE key = 'local-admin'")
+        admin_rule = vcur.fetchone()
+        self.assertIsNotNone(admin_rule)
+        self.assertEqual(admin_rule["content"], "UPSTREAM UPDATED admin rule v2.1")
+
+        # New official rule and skill must be added
+        vcur.execute("SELECT * FROM rules WHERE key = 'new-official-rule'")
+        self.assertIsNotNone(vcur.fetchone())
+        vcur.execute("SELECT * FROM skills WHERE name = 'official-new-skill'")
+        self.assertIsNotNone(vcur.fetchone())
+
+        vconn.close()
+        self.assertEqual(merge_result["preserved_learned_rules"], 1)
+
+    def test_check_update_functionality(self):
+        # Verify check_update handles versions gracefully
+        res = db_manager.check_update(quiet=True)
+        if res:
+            self.assertIn("has_update", res)
+            self.assertIn("current", res)
+            self.assertIn("latest", res)
+
 
 if __name__ == "__main__":
     unittest.main()
+

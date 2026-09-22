@@ -205,6 +205,12 @@ skillsdb doctor
 
 # View database statistics and measured token/cost savings
 skillsdb stats
+
+# Check for updates on GitHub (version comparison & changelog)
+skillsdb check-update
+
+# Safely update SkillsDB to latest release (zero data loss via differential merge)
+skillsdb update
 ```
 
 ### 2. Project Memory (.agents/memory.db)
