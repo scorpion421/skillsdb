@@ -214,7 +214,18 @@ print("Hello World")
             self.assertIn("current", res)
             self.assertIn("latest", res)
 
+    def test_fix_utf8_functionality(self):
+        # Test check_windows_utf8 and fix_utf8
+        ok, msg = db_manager.check_windows_utf8()
+        self.assertIsInstance(ok, bool)
+        self.assertIsInstance(msg, str)
+        # Should succeed in test environment
+        res = subprocess.run([sys.executable, str(REPO_ROOT / "database" / "db_manager.py"), "fix-utf8", "--check"], capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("SKILLSDB UTF-8 ENCODING FIX", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

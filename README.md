@@ -233,6 +233,12 @@ skillsdb check-update
 
 # Safely update SkillsDB to latest release (zero data loss via differential merge)
 skillsdb update
+
+# Configure Antigravity to run natively with UTF-8 process code page on Windows
+skillsdb fix-utf8
+
+# Check Antigravity UTF-8 manifest status
+skillsdb fix-utf8 --check
 ```
 
 ### 2. Project memory (.agents/memory.db)
@@ -270,6 +276,23 @@ skillsdb sync push
 # Pull latest team database updates from network share
 skillsdb sync pull
 ```
+
+---
+
+## Windows UTF-8 encoding fix
+
+On Windows, applications without an explicit application manifest fall back to the legacy Windows ANSI code page (CP1252 / Western European Latin-1). In long multi-turn sessions with German or international text, this can cause UTF-8 multi-byte characters (such as umlauts) to display as mojibake (`Ã¤`, `Ã¶`, `Ã¼`, `ÃŸ`).
+
+SkillsDB provides an automated, non-invasive fix specifically for Google Antigravity:
+```powershell
+skillsdb fix-utf8
+```
+
+### What `skillsdb fix-utf8` does
+* **Application manifests**: Deploys `Antigravity.exe.manifest` and `language_server.exe.manifest` with `<activeCodePage>UTF-8</activeCodePage>`.
+* **Zero system disruption**: Does not alter global Windows region settings or require an operating system reboot.
+* **Environment defaults**: Configures standard UTF-8 environment variables (`PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`, `LANG=de_DE.UTF-8`) in the user profile.
+* **Health diagnosis**: Automatically verified and reported by `skillsdb doctor`.
 
 ---
 
