@@ -23,8 +23,12 @@ The agent must always adhere to the active global rules registered in the databa
 5. **Token Efficiency & Context Hygiene**:
    - Strict context hygiene (slice file reads with StartLine/EndLine, compact command outputs like `git status -s`, subagent isolation, no verbose fluff or restatements).
 
-6. **Project Memory**:
-   - In project workspaces, use `.agents/memory.db` for multi-step tasks, architectural work, or extended conversations (omit for trivial one-off queries to save tokens). When handling non-trivial tasks: run `skillsdb mem-get-context` at task start to load context (auto-initializes if new), and record milestone snapshots via `skillsdb mem-save-snapshot "<summary>"` upon completing significant changes or sessions.
+6. **Autonomous Project Memory & Knowledge Protocol (Zero User Effort)**:
+   - In project workspaces, `.agents/memory.db` serves as the unshakeable single source of truth across all turns.
+   - **Autonomous Skill Routing**: When tackling technical domain tasks (Flutter, BigQuery, Docker, Android, Data Science, etc.), autonomously query `skillsdb suggest "<task>"` and inspect micro-skills via `skillsdb get-skill <name> --section "<Section>"` or `--summary` without asking the user.
+   - **Autonomous Snapshotting**: Silently record milestone snapshots via `skillsdb mem-save-snapshot "<summary>"` upon completing significant changes, refactors, or feature milestones.
+   - **Autonomous Learning**: When the user expresses lasting preferences, corrections, or conventions, silently persist them via `skillsdb mem-save-decision` (workspace) or `skillsdb learn-rule` (global).
+   - **Continuous Flow**: Never interrupt the user's flow or prompt the user to restart/switch chats; maintain precision and stability across long sessions through surgical micro-skills and memory anchors.
 
 To inspect or search detailed rules and workflow skills on demand, use the `customizations-db` skill or run:
 `skillsdb get-active-rules` (or `python "$env:USERPROFILE\.gemini\database\db_manager.py" get-active-rules`)

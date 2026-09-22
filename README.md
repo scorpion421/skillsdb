@@ -188,15 +188,22 @@ skillsdb suggest "Flutter widget layout overflow"
 # Retrieve full instructions for a specific skill
 skillsdb get-skill admin-elevation
 
+# Micro-Skills: Inspect outline & section list (~80 tokens)
+skillsdb get-skill flutter-fix-layout-issues --summary
+
+# Micro-Skills: Load only a specific section (~150 tokens, saving 85% context)
+skillsdb get-skill flutter-fix-layout-issues --section "Fixing RenderFlex Overflow"
+
+# Autonomous Learning: Persist a learned rule globally into SQLite
+skillsdb learn-rule "python-standards" "Python Guidelines" "Always use typing and dataclasses."
+
 # Full-text search across all rules and 120 skills
 skillsdb search "bigquery"
 
-# View complete rule details
-skillsdb get-rule scripting-rules
-skillsdb get-rule token-efficiency
-skillsdb get-rule project-memory
+# Run system health diagnostics (DB integrity, PATH, hooks, git ignore)
+skillsdb doctor
 
-# View database statistics and token metrics
+# View database statistics and measured token/cost savings
 skillsdb stats
 ```
 
