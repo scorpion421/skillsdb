@@ -1,5 +1,6 @@
-# SkillsDB: Centralized Customizations & Token-Efficient Knowledge Engine for Google Antigravity
+# SkillsDB: Centralized Customizations, Autonomous Memory & Token-Efficient Knowledge Engine for Google Antigravity
 
+[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/scorpion421/skillsdb/releases/tag/v2.1.0)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/scorpion421/skillsdb)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
 [![PowerShell](https://img.shields.io/badge/powershell-5.1%2B%20%7C%207%2B-blue.svg)](https://github.com/PowerShell/PowerShell)
@@ -7,7 +8,7 @@
 [![Antigravity](https://img.shields.io/badge/compatible-Google%20Antigravity%202.0-orange.svg)](https://deepmind.google/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**SkillsDB** is a high-performance knowledge indexing, retrieval, and episodic memory architecture designed for Google Antigravity AI agents. It eliminates static prompt bloat by decoupling enterprise rules and domain skills into an embedded, on-demand SQLite FTS5 database.
+**SkillsDB** is an enterprise-grade knowledge indexing, retrieval, and episodic memory architecture designed for Google Antigravity AI agents. It eliminates static prompt bloat by decoupling enterprise rules and 120+ domain skills into an embedded, on-demand SQLite FTS5 database with native lifecycle hook integration and zero cognitive load.
 
 ---
 
@@ -41,24 +42,27 @@ flowchart TD
     subgraph NewWay ["The SkillsDB Way (Automatic & Lean)"]
         direction TB
         Q2["You: 'How do I center a button in CSS?'"] --> Step2["AI Assistant starts super light (~380 tokens)"]
-        Step2 --> Search["Quickly checks its local SkillsDB library:"]
-        Search --> Exact["Grabs ONLY the CSS layout skill in milliseconds"]
-        Exact --> Fast["Instant answer, 97% cheaper, remembers your project!"]
+        Step2 --> Hook["Native PreInvocation Hook auto-injects project facts"]
+        Hook --> Search["Checks local SkillsDB library via FTS5:"]
+        Search --> Micro["Grabs ONLY the specific micro-skill section (~150 tokens)"]
+        Micro --> Fast["Instant answer, 97% cheaper, remembers your project!"]
     end
 ```
 
 ---
 
-### 4 Big Benefits for Beginners
+### 5 Big Benefits for Beginners & Pros
 
 1. **You Won't Run Out of AI Usage Quota**:
-   Every word an AI reads or writes consumes "tokens" (like fuel). By reducing startup waste by **97.4%**, you can ask dozens of questions and experiment freely without hitting *"Usage limit reached"* warnings.
+   By reducing startup waste by **97.4%** and using micro-skills instead of full document dumps, you can code freely without hitting *"Usage limit reached"* warnings.
 2. **Clearer, Higher-Quality Answers**:
    When the AI is not distracted by 100 tools it does not need for your task, its answers are more focused, concise, and easier to understand.
-3. **Automatic Project Memory (No Repeating Yourself!)**:
-   Normally, when you start a new chat tomorrow, the AI forgets everything you built today. SkillsDB automatically remembers your project's decisions and milestones, so you never have to re-explain your whole project from scratch.
-4. **Zero Extra Work for You**:
-   You do not need to learn any database commands or manage files. You talk to your AI assistant naturally, and SkillsDB works invisibly in the background.
+3. **Automatic Project Memory (Zero Repeated Explanations)**:
+   SkillsDB automatically remembers your project's decisions, facts, and milestones in `.agents/memory.db`. Even in 1,800-step sessions, the agent never forgets past architectural agreements.
+4. **Micro-Skills Engine (-85% Retrieval Overhead)**:
+   Instead of loading a 2,500-token manual, the agent pulls only the specific 150-token recipe, checklist, or diagnostic snippet required.
+5. **Zero User Friction**:
+   You talk to your AI assistant naturally. SkillsDB works invisibly in the background with zero mandatory CLI commands.
 
 ---
 
@@ -85,7 +89,8 @@ SkillsDB replaces static prompt dumping with an indexed **SQLite knowledge engin
 | :--- | :--- | :--- | :--- |
 | **Startup Prompt Overhead** | ~14,813 tokens | **~382 tokens** | **-97.4% reduction** |
 | **Available Knowledge Base** | 120 skills (choking context) | **120 skills** (FTS5 indexed) | **100% capacity preserved** |
-| **Multi-Turn Step Efficiency** | 15k tokens per round-trip | **~380 tokens per round-trip** | **~170k+ tokens saved / 12 steps** |
+| **Skill Retrieval Cost** | 2,500 tokens (full file) | **~150 tokens** (Micro-Skills) | **-85% retrieval cost** |
+| **Multi-Turn Step Efficiency** | 15k tokens per round-trip | **~380 tokens per round-trip** | **~37M+ tokens saved / 2,500 steps** |
 | **Scalability Limit** | ~10-15 plugins maximum | **10,000+ skills effortlessly** | **Infinite scalability** |
 
 ---
@@ -97,6 +102,7 @@ flowchart TD
     subgraph Antigravity ["Google Antigravity Runtime"]
         Agent["Antigravity Agent (LLM)"]
         Directive["Global Directive (AGENTS.md)\n~382 tokens"]
+        Hooks["Native Lifecycle Hooks (hooks.json)\nPreInvocation Event"]
     end
 
     subgraph CentralEngine ["SkillsDB Central Knowledge Engine"]
@@ -109,29 +115,36 @@ flowchart TD
         MemDB[("memory.db\nEpisodic Project Memory")]
         Decisions["Architectural Decisions"]
         Snapshots["Session Milestones"]
+        Facts["Project Facts & Configs"]
     end
 
     Directive -->|"Guides agent autonomously"| Agent
-    Agent -->|"On-demand lookup (suggest / get-skill)"| CLI
+    Hooks -->|"Auto-injects memory at Turn 1"| Agent
+    Agent -->|"Micro-skill query (--section / --summary)"| CLI
     CLI <-->|"Sub-millisecond query"| CentralDB
-    CentralDB <-->|"Sync & indexing"| PluginArchive
+    CentralDB <-->|"Differential safe sync"| PluginArchive
     Agent -->|"Automated session memory"| MemDB
     MemDB --> Decisions
     MemDB --> Snapshots
+    MemDB --> Facts
 ```
 
 ---
 
-## Core Philosophy: Zero Cognitive Load
+## Core Philosophy: Zero Cognitive Load ("Invisible Superpowers")
 
 The core design principle of SkillsDB is **complete transparency**:
 
 1. **Autonomous Knowledge Retrieval**:
-   The user asks a question in plain natural language (*"Fix this layout overflow in Flutter"*). The agent detects the domain, queries `skillsdb suggest` in milliseconds, retrieves the relevant skill, and executes the solution.
-2. **Effortless Workstation Deployment**:
-   Provisioning a new machine takes one sentence to Antigravity: *"Please deploy Antigravity customizations from this repository"*.
+   The user asks a question in plain natural language (*"Fix this layout overflow in Flutter"*). The agent detects the domain, queries `skillsdb suggest` in milliseconds, retrieves only the relevant micro-skill section, and executes the fix.
+2. **Zero-Tool-Call Memory Ingestion**:
+   Native `PreInvocation` hooks detect the project's `.agents/memory.db` and inject facts and recent milestones into the model's sightline as an ephemeral message on Turn 1 with zero tool overhead.
 3. **Continuous Autonomous Learning**:
-   Telling the agent *"Remember this convention"* automatically persists it to the database via CLI in the background.
+   Telling the agent *"Remember this convention"* automatically persists it to the database via `skillsdb mem-save-decision` (project) or `skillsdb learn-rule` (global) in the background.
+4. **Continuous Flow (No Chat-Switch Nagging)**:
+   The agent maintains precision across 1,000+ steps without interrupting the developer to restart chats.
+5. **Safe Non-Destructive Updates**:
+   Upgrades never overwrite user databases. Custom learned rules and project memories are 100% preserved.
 
 ---
 
@@ -141,9 +154,20 @@ To prevent bloating the global database with project-specific trivia while still
 
 * **Autonomous Lifecycle**:
   * **Trivial Queries** (*"How does this regex work?"*): Memory is bypassed entirely (0 token overhead, no disk footprint).
-  * **Non-Trivial Tasks** (Refactoring, features, long sessions): The agent runs `skillsdb mem-get-context` at task start and records progress snapshots via `skillsdb mem-save-snapshot` upon completion.
+  * **Non-Trivial Tasks** (Refactoring, features, long sessions): The agent loads context at task start and records progress snapshots via `skillsdb mem-save-snapshot` upon completion.
 * **Zero Orphan Footprint**: Deleting a project folder deletes its memory database instantly.
-* **Auto-Pruning (`mem-prune`)**: Automatically reconciles deleted Antigravity conversation IDs and reclaims disk space with incremental SQLite auto-vacuum.
+* **Auto-Pruning (`mem-prune`)**: Automatically reconciles deleted conversation IDs and reclaims disk space with incremental SQLite auto-vacuum.
+
+---
+
+## Safe Non-Destructive Updates (Zero Data Loss Guarantee)
+
+SkillsDB includes an automated differential merge engine to keep workstations up to date without ever losing user customizations:
+
+* **Automatic Pre-Update Backup**: Creates a timestamped safety backup (`customizations.db.bak_YYYYMMDD_HHMMSS`) before any modifications.
+* **Differential SQLite Merge**: Using SQLite `ATTACH DATABASE`, official skills and rules are updated, while **100% of user-learned rules (`category = 'learned'`) and custom skills are preserved**.
+* **Safety Audit & Rollback**: Validates that all user-learned rules remain intact after merge; automatically rolls back if any discrepancy is detected.
+* **Untouched Project Memory**: Local `.agents/memory.db` files in workspace repositories are never touched during global updates.
 
 ---
 
@@ -168,8 +192,8 @@ python deploy.py
 The script automatically:
 1. Deploys `customizations.db` to `~/.gemini/database/`.
 2. Installs the `skillsdb` CLI to `~/.gemini/antigravity/bin/` (in your system PATH).
-3. Configures `customizations-db` as the sole active plugin in `~/.gemini/config/plugins/`.
-4. Safely moves static legacy plugins to `~/.gemini/plugins_archive/` (completely eliminating prompt bloat and dormant MCP startup errors).
+3. Configures `customizations-db` with native lifecycle hooks in `~/.gemini/config/plugins/`.
+4. Safely moves static legacy plugins to `~/.gemini/plugins_archive/` (eliminating prompt bloat).
 
 ---
 
@@ -177,7 +201,7 @@ The script automatically:
 
 The global `skillsdb` command is accessible from any terminal and working directory:
 
-### 1. Rules & Skills
+### 1. Rules, Skills & Diagnostics
 ```powershell
 # Display all active system rules
 skillsdb get-active-rules
@@ -253,13 +277,14 @@ skillsdb sync pull
 
 ## Global System Rules Enforced
 
-All Antigravity agents running with SkillsDB adhere to 5 core directives:
+All Antigravity agents running with SkillsDB adhere to 6 core directives:
 
-1. **Communication**: Informal German ("Du", never "Sie") when conversing with German-speaking users.
-2. **Scripting Standards**: Professional English code, comments, and outputs; no emojis; no em-dashes or en-dashes; strictly no VBScript.
-3. **Admin Elevation**: Seamless execution with elevated administrator privileges using encrypted Windows DPAPI credentials without interactive UAC prompts.
-4. **Token Efficiency**: Strict context hygiene (line-sliced file views, bounded command outputs, subagent isolation for wide searches, concise responses).
-5. **Project Memory**: Autonomous project continuity via `.agents/memory.db` for multi-step tasks; zero overhead on trivial questions.
+1. **Universal Formatting Invariants**: Strictly no em-dashes (Unicode U+2014) or en-dashes (Unicode U+2013); strictly no emojis.
+2. **Communication**: Informal German ("Du", never "Sie") with natural German spelling including umlauts (ä, ö, ü, ß).
+3. **Scripting Standards**: Professional English code, comments, and outputs (ASCII only); proper error handling; strictly no VBScript.
+4. **Admin Elevation**: Seamless execution with elevated administrator privileges using encrypted Windows DPAPI credentials without interactive UAC prompts.
+5. **Token Efficiency**: Strict context hygiene (line-sliced file views, bounded command outputs, subagent isolation for wide searches, concise responses).
+6. **Autonomous Project Memory & Continuous Flow**: Persistent episodic memory across sessions; autonomous micro-skill routing and snapshotting; zero chat-switching interruptions.
 
 ---
 
@@ -269,14 +294,17 @@ All Antigravity agents running with SkillsDB adhere to 5 core directives:
 SkillsDB/
 ├── .agents/                    # Project-level episodic memory (.agents/memory.db)
 ├── database/
-│   ├── customizations.db       # Central SQLite database (120 skills, 7 rules, FTS5)
-│   └── db_manager.py           # Core CLI engine and SQLite abstraction layer
+│   ├── customizations.db       # Central SQLite database (120 skills, 8 rules, FTS5)
+│   └── db_manager.py           # Core CLI engine, micro-skills, and safe update manager
 ├── plugin/
 │   ├── plugin.json             # Antigravity plugin manifest
+│   ├── hooks.json              # Native PreInvocation lifecycle hook
 │   ├── rules/
 │   │   └── AGENTS.md           # Minimal ~380-token system prompt directive
 │   └── skills/
 │       └── customizations-db/  # Customization DB interface skill
+├── tests/
+│   └── test_autonomous.py      # Automated unit test suite (differential merge, hooks, etc.)
 ├── deploy.ps1                  # PowerShell automated deployment script (Windows)
 ├── deploy.py                   # Python automated deployment script (Cross-platform)
 ├── .gitignore                  # Git hygiene configuration
