@@ -1,6 +1,6 @@
 # SkillsDB: Centralized customizations, autonomous memory, and token-efficient knowledge engine for Google Antigravity
 
-[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/scorpion421/skillsdb/releases/tag/v2.1.0)
+[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](https://github.com/scorpion421/skillsdb/releases/tag/v2.2.0)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/scorpion421/skillsdb)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
 [![PowerShell](https://img.shields.io/badge/powershell-5.1%2B%20%7C%207%2B-blue.svg)](https://github.com/PowerShell/PowerShell)

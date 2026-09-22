@@ -25,7 +25,7 @@ if sys.platform == "win32":
         pass
 
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 
 # Dynamically resolve user-relative paths
 GEMINI_DIR = Path.home() / ".gemini"
