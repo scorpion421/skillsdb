@@ -23,8 +23,8 @@ skillsdb get-active-rules
 ```
 This outputs all mandatory rules:
 * `global-formatting`: Universal output formatting invariants (strictly no emojis, strictly no em/en-dashes across all outputs).
-* `communication-style`: Always informal German ("Du", never "Sie") with natural umlauts (ä, ö, ü, ß).
-* `no-deppenbindestrich`: Strictly no superfluous or incorrect hyphens in German compound words.
+* `communication-style`: Always informal German ("Du", never "Sie") with natural umlauts (ä, ö, ü, ß) and strict Komposita writing rules.
+* `no-deppenbindestrich`: Strict German Komposita orthography: compound words must be joined as single words (strictly no Deppenbindestriche).
 * `scripting-rules`: English only, proper error handling, strictly no VBScript.
 * `local-admin`: Admin elevation via DPAPI encrypted credentials for `<DOMAIN>\<USERNAME>.adm`.
 * `token-efficiency`: Context hygiene, sliced file views, bounded command outputs, subagent isolation.
