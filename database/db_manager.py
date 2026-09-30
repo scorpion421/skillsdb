@@ -1076,14 +1076,17 @@ def calculate_transcript_savings():
         return None
 
     tokens_saved = total_turns * 14430
-    dollars_saved = (tokens_saved / 1_000_000) * 2.00
+    dollars_saved_pro = (tokens_saved / 1_000_000) * 2.00
+    dollars_saved_ultra = (tokens_saved / 1_000_000) * 7.50
 
     return {
         "sessions": session_count,
         "model_turns": total_turns,
         "steps": total_steps,
         "tokens_saved": tokens_saved,
-        "dollars_saved": dollars_saved
+        "dollars_saved": dollars_saved_pro,
+        "dollars_saved_pro": dollars_saved_pro,
+        "dollars_saved_ultra": dollars_saved_ultra
     }
 
 
@@ -1105,7 +1108,11 @@ def stats(conn: sqlite3.Connection, show_savings: bool = False):
         print(f"Tracked Sessions:     {savings['sessions']} active sessions")
         print(f"Total Model Turns:    {savings['model_turns']:,} turns ({savings['steps']:,} steps)")
         print(f"Prompt Bloat Avoided: ~{savings['tokens_saved']:,} tokens (-97.4% per turn)")
-        print(f"Estimated Cost Saved: ~${savings['dollars_saved']:.2f} USD")
+        print(f"Cost Saved (Gemini Pro):   ~${savings['dollars_saved_pro']:.2f} USD")
+        print(f"Cost Saved (Gemini Ultra): ~${savings['dollars_saved_ultra']:.2f} USD")
+        tier, tdesc = detect_model_tier()
+        if tier == TIER_ULTRA:
+            print(f"Active Profile:       ULTRA (~${savings['dollars_saved_ultra']:.2f} USD saved / high quota protection)")
     # 6. Update status
     try:
         up_chk = check_update(quiet=True)
