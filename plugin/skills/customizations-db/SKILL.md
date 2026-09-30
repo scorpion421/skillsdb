@@ -24,6 +24,7 @@ skillsdb get-active-rules
 This outputs all mandatory rules:
 * `global-formatting`: Universal output formatting invariants (strictly no emojis, strictly no em/en-dashes across all outputs).
 * `communication-style`: Always informal German ("Du", never "Sie") with natural umlauts (ä, ö, ü, ß).
+* `no-deppenbindestrich`: Strictly no superfluous or incorrect hyphens in German compound words.
 * `scripting-rules`: English only, proper error handling, strictly no VBScript.
 * `local-admin`: Admin elevation via DPAPI encrypted credentials for `<DOMAIN>\<USERNAME>.adm`.
 * `token-efficiency`: Context hygiene, sliced file views, bounded command outputs, subagent isolation.
@@ -93,4 +94,29 @@ Each project maintains its own isolated SQLite memory database with FTS5 search 
   ```powershell
   skillsdb sync push   # Push local DB updates to network share
   skillsdb sync pull   # Pull latest updates from network share
+  ```
+
+### 7. Adaptive Model Concurrency & Ultra Batching (v2.3.0)
+* **Check/Set Active Model Profile**:
+  ```powershell
+  skillsdb profile          # View active model profile and concurrency settings
+  skillsdb profile set ultra
+  skillsdb profile auto     # Reset to automatic transcript/runtime detection
+  ```
+* **Batch Fetch Multiple Skills Concurrently**:
+  ```powershell
+  skillsdb get-skills <skill1> <skill2> ... --summary
+  ```
+* **Prefetch Pre-Indexed Domain Cluster**:
+  ```powershell
+  skillsdb get-cluster flutter --summary
+  skillsdb get-cluster data --json
+  ```
+* **Multi-Query Parallel Search**:
+  ```powershell
+  skillsdb search-multi "<query1>" "<query2>" ...
+  ```
+* **Benchmark Concurrency Engine**:
+  ```powershell
+  skillsdb benchmark-concurrency --queries 20 --workers 16
   ```

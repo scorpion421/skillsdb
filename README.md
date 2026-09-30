@@ -1,6 +1,6 @@
 # SkillsDB: Centralized customizations, autonomous memory, and token-efficient knowledge engine for Google Antigravity
 
-[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](https://github.com/scorpion421/skillsdb/releases/tag/v2.2.0)
+[![Version](https://img.shields.io/badge/version-2.3.0-blue.svg)](https://github.com/scorpion421/skillsdb/releases/tag/v2.3.0)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/scorpion421/skillsdb)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
 [![PowerShell](https://img.shields.io/badge/powershell-5.1%2B%20%7C%207%2B-blue.svg)](https://github.com/PowerShell/PowerShell)
@@ -295,6 +295,29 @@ skillsdb sync push
 skillsdb sync pull
 ```
 
+### 4. Adaptive model concurrency and Ultra batching (v2.3.0)
+```powershell
+# View active model profile and concurrency settings
+skillsdb profile
+
+# Explicitly set model profile (ultra, standard, lean, or auto)
+skillsdb profile set ultra
+skillsdb profile auto
+
+# Retrieve multiple skills concurrently in 1 batch call (up to 16 parallel threads)
+skillsdb get-skills flutter-apply-architecture-best-practices flutter-add-widget-test --summary
+
+# Prefetch an entire domain cluster of skills concurrently
+skillsdb get-cluster flutter --summary
+skillsdb get-cluster data --json
+
+# Execute multiple search queries concurrently
+skillsdb search-multi "bigquery optimization" "firebase auth" "docker container"
+
+# Benchmark sequential vs. parallel multi-threaded retrieval throughput
+skillsdb benchmark-concurrency --queries 20 --workers 16
+```
+
 ---
 
 ## Windows UTF-8 encoding fix
@@ -316,14 +339,15 @@ skillsdb fix-utf8
 
 ## Global system rules
 
-All Antigravity agents running with SkillsDB adhere to 6 core directives:
+All Antigravity agents running with SkillsDB adhere to 7 core directives:
 
 1. **Universal formatting invariants**: Strictly no em-dashes (Unicode U+2014) or en-dashes (Unicode U+2013); strictly no emojis.
-2. **Communication**: Informal German ("Du", never "Sie") with natural German spelling including umlauts (ä, ö, ü, ß).
+2. **Communication**: Informal German ("Du", never "Sie") with natural German spelling including umlauts (ä, ö, ü, ß). Strictly no Deppenbindestriche in German compound words.
 3. **Scripting standards**: Professional English code, comments, and outputs (ASCII only); proper error handling; strictly no VBScript.
 4. **Admin elevation**: Seamless execution with elevated administrator privileges using encrypted Windows DPAPI credentials without interactive UAC prompts.
 5. **Token efficiency**: Strict context hygiene (line-sliced file views, bounded command outputs, subagent isolation for wide searches, concise responses).
 6. **Autonomous project memory and continuous flow**: Persistent episodic memory across sessions; autonomous micro-skill routing and snapshotting; zero chat-switching interruptions.
+7. **Adaptive model concurrency protocol**: Autonomous detection of model tier (`ultra`, `standard`, `lean`); 16-thread parallel batch fetching and cluster prefetching for Ultra; compact sequential micro-skills for Standard/Lean.
 
 ---
 

@@ -12,6 +12,7 @@ The agent must always adhere to the active global rules registered in the databa
 2. **Conversational Communication**:
    - Always use informal German ("Du", never "Sie") when conversing with the user.
    - Use natural German spelling INCLUDING umlauts (ä, ö, ü, ß). Never replace umlauts with ae, oe, ue in regular conversation text.
+   - **No Deppenbindestriche**: Strictly never use superfluous or incorrect hyphens in German compound words ("Deppenbindestrich"). Always write German compound nouns as a single joined word (e.g., "Abteilungskontingent" never "Abteilungs-Kontingent", "Browsertool" never "Browser-Tool", "Tabwechsel" never "Tab-Wechsel", "Standardeinstellung" never "Standard-Einstellung"), unless an acronym or official orthographic standard specifically mandates a hyphen (e.g., "IT-Leiter", "B2B-Bereich").
 
 3. **Coding & Scripting Standards**:
    - All code, comments, console outputs, dialogs, and commit messages strictly in grammatically correct English (ASCII only).
@@ -29,6 +30,11 @@ The agent must always adhere to the active global rules registered in the databa
    - **Autonomous Snapshotting**: Silently record milestone snapshots via `skillsdb mem-save-snapshot "<summary>"` upon completing significant changes, refactors, or feature milestones.
    - **Autonomous Learning**: When the user expresses lasting preferences, corrections, or conventions, silently persist them via `skillsdb mem-save-decision` (workspace) or `skillsdb learn-rule` (global).
    - **Continuous Flow**: Never interrupt the user's flow or prompt the user to restart/switch chats; maintain precision and stability across long sessions through surgical micro-skills and memory anchors.
+
+7. **Adaptive Model Concurrency Protocol (Ultra / Standard / Lean)**:
+   - SkillsDB autonomously detects the active Gemini model tier (`ultra`, `standard`, `lean`).
+   - **Gemini Ultra Mode**: When Ultra is active, utilize high-concurrency capabilities. Fetch skills in parallel batch calls (`skillsdb get-skills <skill1> <skill2> ...` or `skillsdb get-cluster <domain>`), execute multi-query searches concurrently (`skillsdb search-multi "<q1>" "<q2>"`), and swarm tasks across parallel background subagents (up to 16 workers) to minimize turnaround latency.
+   - **Gemini Standard / Lean Mode**: Conserve quota and avoid prompt bloat. Fetch targeted micro-skill sections via `skillsdb get-skill <name> --section "<Section>"` or `--summary` sequentially.
 
 To inspect or search detailed rules and workflow skills on demand, use the `customizations-db` skill or run:
 `skillsdb get-active-rules` (or `python "$env:USERPROFILE\.gemini\database\db_manager.py" get-active-rules`)

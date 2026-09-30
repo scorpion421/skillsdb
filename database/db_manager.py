@@ -14,6 +14,8 @@ import shutil
 import sqlite3
 import argparse
 import urllib.request
+import concurrent.futures
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 # Ensure UTF-8 output encoding across Windows PowerShell and CMD
@@ -25,7 +27,23 @@ if sys.platform == "win32":
         pass
 
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"
+
+# Model capability tiers
+TIER_LEAN = "lean"        # Gemini Flash, Flash-Lite, micro-skills, minimal token footprint
+TIER_STANDARD = "standard"# Gemini Pro, standard sequential execution
+TIER_ULTRA = "ultra"      # Gemini Ultra, high-concurrency batching & subagent swarming
+
+# Pre-indexed skill clusters for instant parallel prefetching
+SKILL_CLUSTERS = {
+    "flutter": ["flutter-apply-architecture-best-practices", "flutter-add-widget-test", "flutter-setup-declarative-routing", "flutter-fix-layout-issues", "flutter-build-responsive-layout"],
+    "android": ["android-cli", "flutter-apply-architecture-best-practices", "flutter-build-responsive-layout"],
+    "data": ["bigquery-sql", "bigquery-ai-ml", "bigquery-bigframes", "dataform-bigquery", "dbt-bigquery"],
+    "firebase": ["firebase-firestore", "firebase-auth-basics", "firebase-data-connect", "firebase-security-rules-auditor", "firebase-basics"],
+    "web": ["chrome-devtools", "modern-web-guidance", "a11y-debugging", "memory-leak-debugging"],
+    "admin": ["admin-elevation", "customizations-db", "credentials", "permissioned-github"],
+    "security": ["admin-elevation", "credentials", "firebase-security-rules-auditor", "gcs-security-assessment"]
+}
 
 # Dynamically resolve user-relative paths
 GEMINI_DIR = Path.home() / ".gemini"
@@ -102,6 +120,14 @@ def init_db(conn: sqlite3.Connection):
         content,
         content='skills',
         content_rowid='id'
+    );
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS runtime_config (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT
     );
     """)
 
@@ -244,6 +270,12 @@ def suggest_skills(conn: sqlite3.Connection, task_description: str, limit: int =
         print(f"{idx}. [{m['plugin_name']}] {m['name']} (~{m['token_estimate']} tokens)")
         print(f"   Desc: {desc}")
         print(f"   Command to view: python ~/.gemini/database/db_manager.py get-skill {m['name']}\n")
+
+    tier, _ = detect_model_tier()
+    if tier == TIER_ULTRA and len(matches) > 1:
+        skill_names_str = " ".join([m['name'] for m in matches])
+        print(f"  [Ultra Concurrency Tip] Retrieve all recommended skills simultaneously in 1 call:")
+        print(f"  skillsdb get-skills {skill_names_str}\n")
 
 
 def sync_database(conn: sqlite3.Connection, direction: str, remote_path_str: str = None):
@@ -621,6 +653,308 @@ def get_skill(conn: sqlite3.Connection, name: str, summary: bool = False, sectio
     print(f"Category: {skill['category']} | Active: {bool(skill['is_active'])}")
     print(f"Token estimate: ~{skill['token_estimate']} tokens\n")
     print(skill['content'])
+
+
+def get_thread_connection(db_path: Path = DB_PATH) -> sqlite3.Connection:
+    """Thread-safe SQLite connection configured for concurrent readers under WAL mode."""
+    conn = sqlite3.connect(db_path, timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode = WAL;")
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA synchronous = NORMAL;")
+    return conn
+
+
+def detect_model_tier(cid: str = None) -> tuple[str, str]:
+    """
+    Detects the active Gemini model tier and returns (tier, source_description).
+    Tiers:
+      - 'ultra': Gemini Ultra, Gemini 2.0/3.x Pro (High/Ultra), or explicit Ultra configurations.
+      - 'standard': Gemini Pro (Standard).
+      - 'lean': Gemini Flash, Flash-Lite, or low-quota sessions.
+    """
+    # 1. Environment variable override
+    env_tier = os.environ.get("SKILLSDB_MODEL_TIER", "").strip().lower()
+    if env_tier in [TIER_LEAN, TIER_STANDARD, TIER_ULTRA]:
+        return env_tier, f"Environment variable SKILLSDB_MODEL_TIER={env_tier}"
+
+    # 2. Database configuration override (runtime_config)
+    try:
+        if DB_PATH.exists():
+            conn = get_connection(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM runtime_config WHERE key = 'model_tier';")
+            row = cursor.fetchone()
+            conn.close()
+            if row and row[0]:
+                val = row[0].strip().lower()
+                if val in [TIER_LEAN, TIER_STANDARD, TIER_ULTRA]:
+                    return val, f"Configured profile (runtime_config.model_tier={val})"
+    except Exception:
+        pass
+
+    # 3. Transcript inspection for active conversation
+    cid = cid or os.environ.get("ANTIGRAVITY_CONVERSATION_ID")
+    brain_dir = Path.home() / ".gemini" / "antigravity" / "brain"
+    target_path = None
+    if cid:
+        candidate = brain_dir / cid / ".system_generated" / "logs" / "transcript.jsonl"
+        if candidate.exists():
+            target_path = candidate
+
+    if not target_path and brain_dir.exists():
+        transcripts = sorted(brain_dir.glob("*/.system_generated/logs/transcript.jsonl"), key=os.path.getmtime, reverse=True)
+        if transcripts:
+            target_path = transcripts[0]
+
+    if target_path and target_path.exists():
+        try:
+            conv_id = target_path.parents[2].name if len(target_path.parents) >= 3 else target_path.name
+            last_tier = None
+            last_desc = None
+            with open(target_path, "r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    if "Model Selection" in line:
+                        line_lower = line.lower()
+                        if "ultra" in line_lower:
+                            last_tier = TIER_ULTRA
+                            last_desc = f"Transcript auto-detection ({conv_id}: Ultra detected)"
+                        elif "flash" in line_lower or "flash-lite" in line_lower:
+                            last_tier = TIER_LEAN
+                            last_desc = f"Transcript auto-detection ({conv_id}: Flash detected)"
+                        elif "pro" in line_lower:
+                            if "high" in line_lower:
+                                last_tier = TIER_ULTRA
+                                last_desc = f"Transcript auto-detection ({conv_id}: High/Ultra capability detected)"
+                            else:
+                                last_tier = TIER_STANDARD
+                                last_desc = f"Transcript auto-detection ({conv_id}: Pro detected)"
+            if last_tier:
+                return last_tier, last_desc
+        except Exception:
+            pass
+
+    return TIER_STANDARD, "Default tier fallback (Standard Pro)"
+
+
+def set_profile(tier_name: str):
+    """Sets manual model tier profile in runtime_config ('ultra', 'standard', 'lean', or 'auto')."""
+    tier = tier_name.strip().lower()
+    conn = get_connection(DB_PATH)
+    init_db(conn)
+    cursor = conn.cursor()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if tier == "auto":
+        cursor.execute("DELETE FROM runtime_config WHERE key = 'model_tier';")
+        conn.commit()
+        conn.close()
+        current, desc = detect_model_tier()
+        print(f"[OK] Model profile reset to AUTO. Current detected tier: {current.upper()} ({desc})")
+    elif tier in [TIER_LEAN, TIER_STANDARD, TIER_ULTRA]:
+        cursor.execute("""
+        INSERT OR REPLACE INTO runtime_config (key, value, updated_at)
+        VALUES ('model_tier', ?, ?);
+        """, (tier, now_iso))
+        conn.commit()
+        conn.close()
+        print(f"[OK] Model profile explicitly set to: {tier.upper()}")
+    else:
+        conn.close()
+        print(f"Error: Unknown profile '{tier_name}'. Choose from: ultra, standard, lean, auto.")
+
+
+def get_profile(cid: str = None):
+    """Displays current active model profile and concurrency settings."""
+    tier, desc = detect_model_tier(cid)
+    print("\n================ SKILLSDB ACTIVE RUNTIME PROFILE ================")
+    print(f"Detected Tier:       {tier.upper()}")
+    print(f"Detection Source:    {desc}")
+    if tier == TIER_ULTRA:
+        print("Concurrency Mode:    HIGH (Multi-threaded batching enabled)")
+        print("Max Reader Workers:  16 parallel threads")
+        print("Batch Retrieval:     Active (skillsdb get-skills / search-multi)")
+        print("Skill Clusters:      Active (skillsdb get-cluster <domain>)")
+    elif tier == TIER_LEAN:
+        print("Concurrency Mode:    LEAN (Token-conserving sequential mode)")
+        print("Max Reader Workers:  1 thread")
+        print("Micro-Skills:        Active (Use --section to preserve quota)")
+    else:
+        print("Concurrency Mode:    STANDARD (Balanced Pro mode)")
+        print("Max Reader Workers:  4 parallel threads")
+    print("=================================================================\n")
+
+
+def fetch_single_skill(skill_name: str, db_path: Path = DB_PATH, summary: bool = False, section: str = None) -> dict:
+    """Thread-safe single skill reader for parallel executors."""
+    conn = get_thread_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT name, plugin_name, category, description, content, token_estimate
+    FROM skills
+    WHERE name = ? OR name LIKE ?
+    LIMIT 1;
+    """, (skill_name, f"%{skill_name}%"))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return {"name": skill_name, "found": False, "content": None, "tokens": 0}
+
+    content = row["content"]
+    tokens = row["token_estimate"]
+    if summary:
+        sections = extract_skill_sections(content)
+        sec_list = "\n".join([f"  * {s['title']} (~{s['tokens']} tokens)" for s in sections])
+        content = f"# Skill Summary: {row['name']} ({row['plugin_name']})\nDescription: {row['description']}\n\nSections:\n{sec_list}"
+        tokens = estimate_tokens(content)
+    elif section:
+        sections = extract_skill_sections(content)
+        matched = next((s for s in sections if section.lower() in s["title"].lower()), None)
+        if matched:
+            content = f"# Skill: {row['name']} > {matched['title']}\n\n{matched['content']}"
+            tokens = matched["tokens"]
+
+    return {
+        "name": row["name"],
+        "plugin_name": row["plugin_name"],
+        "category": row["category"],
+        "description": row["description"],
+        "token_estimate": tokens,
+        "found": True,
+        "content": content
+    }
+
+
+def get_skills_parallel(skill_names: list[str], max_workers: int = 16, as_json: bool = False, summary: bool = False) -> list[dict]:
+    """Retrieves multiple skills concurrently using ThreadPoolExecutor under SQLite WAL mode."""
+    unique_names = list(dict.fromkeys(skill_names))
+    results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(unique_names), max_workers)) as executor:
+        future_to_name = {executor.submit(fetch_single_skill, name, DB_PATH, summary): name for name in unique_names}
+        for future in concurrent.futures.as_completed(future_to_name):
+            try:
+                results.append(future.result())
+            except Exception as e:
+                name = future_to_name[future]
+                results.append({"name": name, "found": False, "error": str(e), "tokens": 0, "content": None})
+
+    name_order = {name: i for i, name in enumerate(unique_names)}
+    results.sort(key=lambda r: name_order.get(r.get("name"), 999))
+
+    if as_json:
+        print(json.dumps(results, indent=2))
+        return results
+
+    total_tokens = sum(r.get("token_estimate", 0) for r in results if r.get("found"))
+    print(f"\n=== Batch Skills Retrieval ({len(results)} skills, ~{total_tokens} tokens total) ===\n")
+    for r in results:
+        if r.get("found"):
+            print(f"--- Skill: {r['name']} (Plugin: {r['plugin_name']}, ~{r['token_estimate']} tokens) ---")
+            print(r["content"])
+            print("-" * 60 + "\n")
+        else:
+            print(f"--- Skill: {r['name']} [NOT FOUND] ---\n")
+    return results
+
+
+def search_single_query(query: str, db_path: Path = DB_PATH, limit: int = 4) -> list[dict]:
+    """Thread-safe FTS5 search query."""
+    conn = get_thread_connection(db_path)
+    cursor = conn.cursor()
+    words = re.findall(r"[a-zA-Z0-9_-]{3,}", query)
+    if not words:
+        conn.close()
+        return []
+    fts_query = " OR ".join(words[:10])
+    cursor.execute("""
+    SELECT s.name, s.plugin_name, s.category, s.description, s.token_estimate, rank
+    FROM skills_fts f
+    JOIN skills s ON f.rowid = s.id
+    WHERE skills_fts MATCH ?
+    ORDER BY rank
+    LIMIT ?;
+    """, (fts_query, limit))
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"name": r["name"], "plugin": r["plugin_name"], "category": r["category"], "description": r["description"], "tokens": r["token_estimate"]} for r in rows]
+
+
+def search_multi_parallel(queries: list[str], max_workers: int = 16, limit_per_query: int = 4, as_json: bool = False) -> dict:
+    """Executes multiple full-text search queries concurrently."""
+    all_results = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(queries), max_workers)) as executor:
+        future_to_q = {executor.submit(search_single_query, q, DB_PATH, limit_per_query): q for q in queries}
+        for future in concurrent.futures.as_completed(future_to_q):
+            q = future_to_q[future]
+            try:
+                all_results[q] = future.result()
+            except Exception as e:
+                all_results[q] = [{"error": str(e)}]
+
+    if as_json:
+        print(json.dumps(all_results, indent=2))
+        return all_results
+
+    print(f"\n=== Multi-Query Parallel FTS5 Search ({len(queries)} queries) ===\n")
+    for q in queries:
+        matches = all_results.get(q, [])
+        print(f"Results for query: '{q}' ({len(matches)} matches)")
+        if matches:
+            for m in matches:
+                if "error" in m:
+                    print(f"  * Error: {m['error']}")
+                else:
+                    print(f"  * [{m['plugin']}] {m['name']} (~{m['tokens']} tokens) - {m['description'][:80]}...")
+        else:
+            print("  * No matches.")
+        print()
+    return all_results
+
+
+def get_cluster(domain: str, max_workers: int = 16, as_json: bool = False, summary: bool = False):
+    """Retrieves all pre-indexed skills belonging to a domain cluster concurrently in a single call."""
+    dom_clean = domain.strip().lower()
+    if dom_clean not in SKILL_CLUSTERS:
+        print(f"Error: Unknown skill cluster '{domain}'. Available clusters: {', '.join(SKILL_CLUSTERS.keys())}")
+        return
+
+    cluster_skills = SKILL_CLUSTERS[dom_clean]
+    print(f"[Ultra Concurrency] Prefetching complete '{dom_clean}' cluster ({len(cluster_skills)} skills: {', '.join(cluster_skills)})...\n")
+    get_skills_parallel(cluster_skills, max_workers=max_workers, as_json=as_json, summary=summary)
+
+
+def benchmark_concurrency(num_queries: int = 20, max_workers: int = 16):
+    """Compares sequential vs. parallel multi-query throughput on customizations.db."""
+    conn = get_connection(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM skills ORDER BY id LIMIT ?;", (num_queries,))
+    names = [r[0] for r in cursor.fetchall()]
+    conn.close()
+
+    if not names:
+        print("Not enough skills in database for benchmark.")
+        return
+
+    print(f"\n================ SKILLSDB CONCURRENCY BENCHMARK ================")
+    print(f"Dataset: {len(names)} skills | Max ThreadPool Workers: {max_workers}")
+
+    # Sequential benchmark
+    start_seq = time.perf_counter()
+    for name in names:
+        fetch_single_skill(name, DB_PATH, summary=True)
+    seq_duration = time.perf_counter() - start_seq
+    print(f"Sequential Execution Time: {seq_duration * 1000:.2f} ms ({len(names) / seq_duration:.1f} queries/sec)")
+
+    # Parallel benchmark
+    start_par = time.perf_counter()
+    unique_names = list(dict.fromkeys(names))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(unique_names), max_workers)) as executor:
+        list(executor.map(lambda n: fetch_single_skill(n, DB_PATH, summary=True), unique_names))
+    par_duration = time.perf_counter() - start_par
+    print(f"Parallel Execution Time:   {par_duration * 1000:.2f} ms ({len(names) / par_duration:.1f} queries/sec)")
+
+    speedup = seq_duration / par_duration if par_duration > 0 else 1.0
+    print(f"High-Concurrency Speedup:  {speedup:.2f}x faster with ThreadPoolExecutor")
+    print("=================================================================\n")
 
 
 
@@ -1044,7 +1378,21 @@ def doctor(conn: sqlite3.Connection):
     except Exception as e:
         print(f"[FAIL] Central Database error: {e}")
 
-    # 2. PATH check
+    # 2. Model Profile & Concurrency Health Check
+    try:
+        tier, tdesc = detect_model_tier()
+        print(f"[OK] Model Concurrency Profile: {tier.upper()} ({tdesc})")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            futures = [ex.submit(fetch_single_skill, "customizations-db", DB_PATH, True) for _ in range(8)]
+            c_results = [f.result() for f in futures]
+        if all(r.get("found") for r in c_results):
+            print("[OK] SQLite Concurrency Engine: 8-thread parallel WAL read test passed")
+        else:
+            print("[WARN] SQLite Concurrency Engine: Concurrency test had partial fetch misses")
+    except Exception as ce:
+        print(f"[FAIL] SQLite Concurrency Engine error: {ce}")
+
+    # 3. PATH check
     skillsdb_in_path = shutil.which("skillsdb")
     if skillsdb_in_path:
         print(f"[OK] Global CLI: Found in PATH ({skillsdb_in_path})")
@@ -1244,53 +1592,61 @@ def handle_pre_invocation_hook():
     proj_path = Path(workspace_paths[0]) if workspace_paths else Path.cwd()
     db_path = get_project_db_path(find_project_root(proj_path))
 
-    if not db_path.exists():
-        print(json.dumps({"injectSteps": []}))
+    tier, tdesc = detect_model_tier()
+    lines = []
+
+    if tier == TIER_ULTRA:
+        lines.append("[SKILLSDB RUNTIME PROFILE: GEMINI ULTRA (16-thread high-concurrency mode)]")
+        lines.append("Parallel batch fetching active: 'skillsdb get-skills <s1> <s2>' | Clusters: 'skillsdb get-cluster <domain>' | Parallel search: 'skillsdb search-multi <q1> <q2>' | Concurrent subagents: 8-16 parallel workers supported.\n")
+
+    if db_path.exists():
+        try:
+            conn = sqlite3.connect(db_path, timeout=5.0)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            mem_lines = []
+            cursor.execute("SELECT key, value FROM project_facts ORDER BY updated_at DESC LIMIT 10;")
+            facts = cursor.fetchall()
+            if facts:
+                mem_lines.append("Project Facts & Configs:")
+                for f in facts:
+                    mem_lines.append(f"  * {f['key']}: {f['value']}")
+
+            cursor.execute("SELECT title, content FROM project_decisions WHERE is_active = 1 ORDER BY updated_at DESC LIMIT 5;")
+            decs = cursor.fetchall()
+            if decs:
+                mem_lines.append("\nActive Architectural Decisions:")
+                for d in decs:
+                    mem_lines.append(f"  * [{d['title']}]: {d['content']}")
+
+            cursor.execute("SELECT summary, next_steps, created_at FROM session_snapshots ORDER BY id DESC LIMIT 1;")
+            snap = cursor.fetchone()
+            if snap:
+                mem_lines.append("\nLatest Project Milestone Snapshot:")
+                mem_lines.append(f"  Summary: {snap['summary']}")
+                if snap['next_steps']:
+                    mem_lines.append(f"  Next Steps: {snap['next_steps']}")
+
+            conn.close()
+
+            if mem_lines:
+                lines.append("=== PROJECT MEMORY CONTEXT (Auto-Loaded via Hook) ===")
+                lines.extend(mem_lines)
+        except Exception:
+            pass
+
+    if lines:
+        context_msg = "\n".join(lines).strip()
+        output = {
+            "injectSteps": [
+                {
+                    "ephemeralMessage": context_msg
+                }
+            ]
+        }
+        print(json.dumps(output))
         return
-
-    try:
-        conn = sqlite3.connect(db_path, timeout=5.0)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-
-        lines = []
-        cursor.execute("SELECT key, value FROM project_facts ORDER BY updated_at DESC LIMIT 10;")
-        facts = cursor.fetchall()
-        if facts:
-            lines.append("Project Facts & Configs:")
-            for f in facts:
-                lines.append(f"  * {f['key']}: {f['value']}")
-
-        cursor.execute("SELECT title, content FROM project_decisions WHERE is_active = 1 ORDER BY updated_at DESC LIMIT 5;")
-        decs = cursor.fetchall()
-        if decs:
-            lines.append("\nActive Architectural Decisions:")
-            for d in decs:
-                lines.append(f"  * [{d['title']}]: {d['content']}")
-
-        cursor.execute("SELECT summary, next_steps, created_at FROM session_snapshots ORDER BY id DESC LIMIT 1;")
-        snap = cursor.fetchone()
-        if snap:
-            lines.append("\nLatest Project Milestone Snapshot:")
-            lines.append(f"  Summary: {snap['summary']}")
-            if snap['next_steps']:
-                lines.append(f"  Next Steps: {snap['next_steps']}")
-
-        conn.close()
-
-        if lines:
-            context_msg = "=== PROJECT MEMORY CONTEXT (Auto-Loaded via Hook) ===\n" + "\n".join(lines)
-            output = {
-                "injectSteps": [
-                    {
-                        "ephemeralMessage": context_msg
-                    }
-                ]
-            }
-            print(json.dumps(output))
-            return
-    except Exception:
-        pass
 
     print(json.dumps({"injectSteps": []}))
 
@@ -1638,6 +1994,34 @@ def main():
     mem_prune_parser.add_argument("--max-age", type=int, default=30, help="Max age in days")
     mem_prune_parser.add_argument("--project", default=None, help="Project root directory (optional)")
 
+    # Model Profile Commands
+    profile_parser = subparsers.add_parser("profile", help="View or configure model tier concurrency profile (ultra, standard, lean, auto)")
+    profile_parser.add_argument("action", nargs="?", default="get", choices=["get", "set", "auto"], help="Profile action (default: get)")
+    profile_parser.add_argument("tier", nargs="?", default=None, help="Model tier when action is 'set' (ultra, standard, lean)")
+
+    # Parallel Concurrency Commands
+    get_skills_parser = subparsers.add_parser("get-skills", help="Retrieve multiple skills concurrently in a single batch call")
+    get_skills_parser.add_argument("names", nargs="+", help="Skill names to retrieve concurrently")
+    get_skills_parser.add_argument("--summary", action="store_true", help="Output only outlines and section lists")
+    get_skills_parser.add_argument("--workers", type=int, default=16, help="Max worker threads (default: 16)")
+    get_skills_parser.add_argument("--json", action="store_true", help="Output results as JSON")
+
+    search_multi_parser = subparsers.add_parser("search-multi", help="Execute multiple search queries concurrently")
+    search_multi_parser.add_argument("queries", nargs="+", help="Search queries")
+    search_multi_parser.add_argument("--workers", type=int, default=16, help="Max worker threads (default: 16)")
+    search_multi_parser.add_argument("--limit", type=int, default=4, help="Limit per query (default: 4)")
+    search_multi_parser.add_argument("--json", action="store_true", help="Output results as JSON")
+
+    cluster_parser = subparsers.add_parser("get-cluster", help="Prefetch all skills belonging to a domain cluster concurrently")
+    cluster_parser.add_argument("domain", help=f"Domain cluster ({', '.join(SKILL_CLUSTERS.keys())})")
+    cluster_parser.add_argument("--summary", action="store_true", help="Output only outlines and section lists")
+    cluster_parser.add_argument("--workers", type=int, default=16, help="Max worker threads (default: 16)")
+    cluster_parser.add_argument("--json", action="store_true", help="Output results as JSON")
+
+    bench_parser = subparsers.add_parser("benchmark-concurrency", help="Benchmark sequential vs. parallel multi-threaded retrieval")
+    bench_parser.add_argument("--queries", type=int, default=20, help="Number of queries/skills to test (default: 20)")
+    bench_parser.add_argument("--workers", type=int, default=16, help="Max worker threads (default: 16)")
+
     args = parser.parse_args()
 
     if args.command == "mem-pre-invocation-hook":
@@ -1715,6 +2099,24 @@ def main():
         stats(conn, show_savings=getattr(args, "savings", False))
     elif args.command == "export-skill":
         export_skill(conn, args.name, args.target)
+    elif args.command == "profile":
+        if args.action == "set":
+            if not args.tier:
+                print("Error: Specify tier to set (ultra, standard, lean). Example: skillsdb profile set ultra")
+            else:
+                set_profile(args.tier)
+        elif args.action == "auto":
+            set_profile("auto")
+        else:
+            get_profile()
+    elif args.command == "get-skills":
+        get_skills_parallel(args.names, max_workers=args.workers, as_json=args.json, summary=args.summary)
+    elif args.command == "search-multi":
+        search_multi_parallel(args.queries, max_workers=args.workers, limit_per_query=args.limit, as_json=args.json)
+    elif args.command == "get-cluster":
+        get_cluster(args.domain, max_workers=args.workers, as_json=args.json, summary=args.summary)
+    elif args.command == "benchmark-concurrency":
+        benchmark_concurrency(num_queries=args.queries, max_workers=args.workers)
 
     conn.close()
 
