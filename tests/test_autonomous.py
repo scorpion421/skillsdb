@@ -16,11 +16,10 @@ import db_manager
 class TestSkillsDBAutonomous(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.test_db_dir = REPO_ROOT / "tests" / "scratch"
-        cls.test_db_dir.mkdir(parents=True, exist_ok=True)
+        import tempfile
+        cls._temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        cls.test_db_dir = Path(cls._temp_dir.name)
         cls.test_db_path = cls.test_db_dir / "test_customizations.db"
-        if cls.test_db_path.exists():
-            cls.test_db_path.unlink()
         
         # Copy real database for testing
         real_db = REPO_ROOT / "database" / "customizations.db"
@@ -34,7 +33,9 @@ class TestSkillsDBAutonomous(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.conn.close()
-        shutil.rmtree(cls.test_db_dir, ignore_errors=True)
+        if hasattr(db_manager, "stop_all_writer_queues"):
+            db_manager.stop_all_writer_queues()
+        cls._temp_dir.cleanup()
 
     def test_extract_skill_sections(self):
         sample_md = """---

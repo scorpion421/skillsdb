@@ -46,6 +46,8 @@ def deploy(source_dir: Path = None, target_dir: Path = None):
     print("[2/5] Deploying database and management CLI...")
     shutil.copy2(source_dir / "database" / "customizations.db", target_db_dir / "customizations.db")
     shutil.copy2(source_dir / "database" / "db_manager.py", target_db_dir / "db_manager.py")
+    if (source_dir / "skillsdb").exists():
+        shutil.copytree(source_dir / "skillsdb", target_db_dir / "skillsdb", dirs_exist_ok=True)
     print(f"      Database deployed to: {target_db_dir}")
 
     # Deploy global CLI wrapper to ~/.gemini/antigravity/bin (in system PATH)

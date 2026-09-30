@@ -26,3 +26,6 @@ Thumbs.db
 # Local credentials and secret stores
 credentials/
 *.credential.xml
+
+# Test scratch folders
+tests/scratch*/

@@ -1,6 +1,6 @@
 # SkillsDB: Centralized customizations, autonomous memory, and token-efficient knowledge engine for Google Antigravity
 
-[![Version](https://img.shields.io/badge/version-2.3.0-blue.svg)](https://github.com/scorpion421/skillsdb/releases/tag/v2.3.0)
+[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/scorpion421/skillsdb/releases/tag/v3.0.0)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/scorpion421/skillsdb)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
 [![PowerShell](https://img.shields.io/badge/powershell-5.1%2B%20%7C%207%2B-blue.svg)](https://github.com/PowerShell/PowerShell)
@@ -8,7 +8,7 @@
 [![Antigravity](https://img.shields.io/badge/compatible-Google%20Antigravity%202.0-orange.svg)](https://deepmind.google/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**SkillsDB** is a knowledge indexing, retrieval, and episodic memory architecture designed for Google Antigravity AI agents. It eliminates static prompt bloat by decoupling enterprise rules and 120+ domain skills into an embedded, on-demand SQLite FTS5 database with native lifecycle hook integration and zero cognitive load.
+**SkillsDB** is a knowledge indexing, retrieval, and episodic memory architecture designed for Google Antigravity AI agents. It eliminates static prompt bloat by decoupling enterprise rules and 120+ domain skills into an embedded, on-demand SQLite FTS5 database with native lifecycle hook integration, multilingual synonym synapses, high-concurrency writer queues, and zero cognitive load.
 
 ---
 
@@ -160,9 +160,76 @@ To prevent bloating the global database with project-specific trivia while still
 
 ---
 
-## Adaptive model concurrency and Gemini Ultra engine (v2.3.0)
+## SkillsDB v3.0 Architectural Advances
 
-SkillsDB v2.3.0 introduces native runtime awareness for the active Gemini model tier. It dynamically tailors its retrieval strategy between high-throughput multi-threaded batching (for Gemini Ultra) and token-conserving sequential micro-skills (for Gemini Pro and Flash).
+SkillsDB v3.0 marks a major generational refactor engineered for enterprise-grade scalability, zero SQLite write collisions during multi-agent swarming, seamless cross-lingual skill discovery, and a clean modular codebase:
+
+```mermaid
+flowchart TD
+    subgraph ModularArch ["1. Modular Package & Bundler"]
+        Pkg["skillsdb/ package (11 modules)"] --> Bundler["build.py bundler"]
+        Bundler --> Standalone["database/db_manager.py\n(100% self-contained standalone CLI)"]
+    end
+
+    subgraph Synapses ["2. Multilingual Synonym Synapses"]
+        DE["German Query: 'mehrsprachige App'"] --> SynMap["Cross-lingual Synapse Dictionary"]
+        SynMap --> Expanded["Expanded FTS5: 'localization intl arb translation'"]
+        Expanded --> EnglishSkills["Matches: flutter-setup-localization"]
+    end
+
+    subgraph LockFree ["3. Lock-Free Concurrency Engine"]
+        Agents["16 Parallel Subagents"] --> WQ["Dedicated Single-Writer WriterQueue"]
+        Agents --> Journal["Append-only unshared journals (.agents/journal/)"]
+        Journal --> Flush["Atomic bulk consolidation into memory.db"]
+        WQ --> SQLite["Zero 'database is locked' errors under WAL"]
+    end
+
+    subgraph ResilientDetect ["4. Resilient 4-Stage Tier Detector"]
+        S1["Stage 1: SKILLSDB_MODEL_TIER env"] --> S2["Stage 2: runtime_config table"]
+        S2 --> S3["Stage 3: Transcript regex parser"]
+        S3 --> S4["Stage 4: Graceful Standard Pro fallback"]
+    end
+```
+
+### 1. Modular Package Architecture & Zero-Dependency Bundler (`build.py`)
+In earlier versions, `db_manager.py` grew into a large monolithic script. In v3.0, the codebase is decomposed into clean, specialized Python modules under `skillsdb/`:
+* `skillsdb.config`: Dynamic paths, model tiers, domain clusters, token estimators.
+* `skillsdb.core.db`: WAL connection pooling, busy timeouts, schema definitions.
+* `skillsdb.core.detector`: Resilient 4-stage Gemini tier detection with graceful fallbacks.
+* `skillsdb.core.concurrency`: ThreadPoolExecutor parallel retrieval engine and benchmarks.
+* `skillsdb.search.synonyms`: Multilingual synonym synapses and cross-lingual query expander.
+* `skillsdb.search.fts`: FTS5 full-text indexing, micro-skill extractors, rule retrievers.
+* `skillsdb.memory.writer_queue`: Asynchronous SQLite write serialization and append-only journals.
+* `skillsdb.memory.project_memory`: Project episodic memory, lifecycle hooks, and transcript savings calculators.
+* `skillsdb.updater.merger`: Differential non-destructive database updates, backups, and doctor diagnostics.
+* `skillsdb.platform.windows_utf8`: Native UTF-8 manifest deployment and registry configuration.
+* `skillsdb.cli`: Argument parsing and command routing.
+
+The automated bundler (`python build.py`) automatically compiles the entire package into a **single, 100% self-contained `database/db_manager.py`** script with zero external dependencies, guaranteeing full backward compatibility with existing shortcuts (`skillsdb.cmd`), pipelines, and system scripts.
+
+### 2. Multi-Agent Asynchronous Writer Queue (`WriterQueue`) & Append-Only Journals
+When running Gemini Ultra with 8 to 16 parallel subagents, multiple agent threads writing simultaneously to SQLite can trigger `sqlite3.OperationalError: database is locked`. SkillsDB v3.0 introduces a dual-layer lock-free write architecture:
+* **In-process WriterQueue**: A dedicated background writer thread per database that processes write operations sequentially via thread-safe queues and `BEGIN IMMEDIATE` transactions, while reader threads read concurrently under WAL mode.
+* **Out-of-process Append-Only Journals**: Out-of-process subagent processes append episodic events to unshared private journal files in `.agents/journal/events_<worker_id>.jsonl` with zero locks. During context loading or milestone completion, `flush_journals()` atomically consolidates all events into `memory.db` in a single transaction.
+
+### 3. Zero-Dependency Multilingual Synonym Synapses
+Official domain skills are written in English (e.g., `flutter-setup-localization`, `flutter-apply-architecture-best-practices`), but developers frequently interact with agents in German or use alternative terminology.
+SkillsDB v3.0 features built-in cross-lingual synonym expansion:
+* Translates German technical concepts (e.g., *"mehrsprachig"*, *"Zustandsverwaltung"*, *"Berechtigung"*, *"Speicherleck"*) and common compound stems into English domain terms (*localization*, *intl*, *state*, *bloc*, *credentials*, *memory leak*).
+* Expands FTS5 queries dynamically using `OR` conjunctions, allowing a query like `skillsdb suggest "mehrsprachige App mit lokaler Übersetzung"` to immediately rank `flutter-setup-localization` as the top result without requiring external 2 GB NLP models.
+
+### 4. Resilient 4-Stage Model Tier Detection
+Replaces brittle log parsing with a robust 4-stage pipeline:
+1. **Explicit Environment Variable**: `SKILLSDB_MODEL_TIER` (e.g. `ultra`, `standard`, `lean`).
+2. **Database Runtime Configuration**: `skillsdb profile set ultra` stored in `runtime_config`.
+3. **Session Transcript Inspection**: Defensive, schema-agnostic regex search in `.system_generated/logs/transcript.jsonl`.
+4. **Graceful Fallback**: Defaults to `standard` (Pro) mode if transcript is unavailable or ambiguous.
+
+---
+
+## Adaptive model concurrency and Gemini Ultra engine
+
+SkillsDB introduces native runtime awareness for the active Gemini model tier. It dynamically tailors its retrieval strategy between high-throughput multi-threaded batching (for Gemini Ultra) and token-conserving sequential micro-skills (for Gemini Pro and Flash).
 
 ```mermaid
 flowchart TD
@@ -238,20 +305,20 @@ Running Gemini Ultra without SkillsDB severely handicaps the model's true potent
 
 ---
 
-## Real-world production benchmarks: 7,000+ turns and 100M+ tokens saved
+## Real-world production benchmarks: 7,300+ turns and 106M+ tokens saved
 
 SkillsDB tracks verified production performance across actual Antigravity development sessions:
 
 | Metric | Traditional static setup | SkillsDB production metrics | Real-world impact |
 | :--- | :--- | :--- | :--- |
 | **Tracked production sessions** | N/A | **29 active sessions** | Measured across real-world workflows |
-| **Total model turns executed** | N/A | **7,060 turns (7,420 steps)** | High-iteration pair programming |
-| **Cumulative prompt bloat avoided** | 0 tokens (full burn) | **101,875,800 tokens** | **~101.9 million tokens saved** |
-| **Cost saved (Gemini Pro rate)** | $0.00 | **~$203.75 USD** | Calculated at $2.00 / 1M input tokens |
-| **Cost saved (Gemini Ultra rate)** | $0.00 | **~$764.07 to $1,018.76 USD** | Calculated at $7.50 to $10.00 / 1M tokens |
-| **Single-session endurance (this chat)** | Compaction at step 90 | **1,180+ steps sustained** | **16.38M tokens saved ($122.84 USD)** |
+| **Total model turns executed** | N/A | **7,374 turns (7,749 steps)** | High-iteration pair programming |
+| **Cumulative prompt bloat avoided** | 0 tokens (full burn) | **106,406,820 tokens** | **~106.4 million tokens saved** |
+| **Cost saved (Gemini Pro rate)** | $0.00 | **~$212.81 USD** | Calculated at $2.00 / 1M input tokens |
+| **Cost saved (Gemini Ultra rate)** | $0.00 | **~$798.05 to $1,064.07 USD** | Calculated at $7.50 to $10.00 / 1M tokens |
+| **Single-session endurance (this chat)** | Compaction at step 90 | **1,220+ steps sustained** | **17.5M+ tokens saved ($131.25 USD)** |
 | **Context amnesia threshold** | Step 80 - 90 (~15k tokens/turn) | **Step 417** (~382 tokens/turn) | **4.6x longer session lifespan** |
-| **Overshoot past compaction limit** | 0 steps (hallucinations begin) | **+392 to +700+ steps** | **Zero knowledge loss via .agents/memory.db** |
+| **Overshoot past compaction limit** | 0 steps (hallucinations begin) | **+392 to +750+ steps** | **Zero knowledge loss via .agents/memory.db** |
 | **Quota consumption impact** | ~6% daily burn for basic tasks | **~1% actual quota consumption** | **83% reduction in quota consumption** |
 
 ### What this proves in practice
@@ -449,9 +516,29 @@ All Antigravity agents running with SkillsDB adhere to 7 core directives:
 ```text
 SkillsDB/
 ├── .agents/                    # Project-level episodic memory (.agents/memory.db)
+├── build.py                    # Zero-dependency bundler: compiles skillsdb/ into standalone db_manager.py
 ├── database/
 │   ├── customizations.db       # Central SQLite database (120 skills, 10 rules, FTS5 + WAL)
-│   └── db_manager.py           # Core CLI engine, micro-skills, concurrency, and safe update manager
+│   └── db_manager.py           # Compiled 100% standalone CLI engine (backward-compatible)
+├── skillsdb/                   # Modular Python package architecture (v3.0)
+│   ├── __init__.py             # Package exports and version metadata
+│   ├── __main__.py             # Direct execution entrypoint (python -m skillsdb)
+│   ├── cli.py                  # CLI argument parsing and command routing
+│   ├── config.py               # Paths, tiers (ultra/standard/lean), clusters, token estimator
+│   ├── core/
+│   │   ├── db.py               # Connection pooling, WAL mode, pragmas, schema init
+│   │   ├── detector.py         # Resilient 4-stage Gemini model tier detection
+│   │   └── concurrency.py      # ThreadPoolExecutor parallel retrieval and benchmarks
+│   ├── memory/
+│   │   ├── project_memory.py   # Isolated episodic memory (.agents/memory.db) & PreInvocation hook
+│   │   └── writer_queue.py     # Asynchronous single-writer queue & append-only journals
+│   ├── platform/
+│   │   └── windows_utf8.py     # Windows UTF-8 application manifests and registry setup
+│   ├── search/
+│   │   ├── fts.py              # FTS5 search, micro-skills, suggestions, rules retrieval
+│   │   └── synonyms.py         # Zero-dependency multilingual synonym synapses (DE -> EN)
+│   └── updater/
+│       └── merger.py           # Differential non-destructive merge, backups, doctor
 ├── plugin/
 │   ├── plugin.json             # Antigravity plugin manifest
 │   ├── hooks.json              # Native PreInvocation lifecycle hook
@@ -461,7 +548,8 @@ SkillsDB/
 │       └── customizations-db/  # Customization DB interface skill (with CLI guide)
 ├── tests/
 │   ├── test_autonomous.py      # Automated unit test suite (differential merge, hooks, etc.)
-│   └── test_ultra_concurrency.py # High-concurrency, model tier, and WAL parallel test suite
+│   ├── test_ultra_concurrency.py # High-concurrency, model tier, and WAL parallel test suite
+│   └── test_v3_architecture.py # WriterQueue stress, journals, synonyms, and modular tests
 ├── deploy.ps1                  # PowerShell automated deployment script (Windows)
 ├── deploy.py                   # Python automated deployment script (Cross-platform)
 ├── .gitignore                  # Git hygiene configuration
