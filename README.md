@@ -17,16 +17,19 @@
 
 SkillsDB is continuously verified in production across real-world software engineering workflows:
 
-| Metric | Traditional Static Plugins | SkillsDB v3.1 Architecture | Verified Real-World Impact |
+| Metric | Traditional Static Plugins | SkillsDB v3.3 Architecture (Quad-AI Fusion) | Verified Real-World Impact |
 | :--- | :--- | :--- | :--- |
 | **Startup Prompt Overhead** | ~14,813 tokens injected per turn | **~382 tokens** | **-97.4% prompt bloat reduction** |
-| **Tracked Production Sessions** | N/A | **61 active sessions** | Measured across actual engineering projects |
-| **Total Model Turns Executed** | N/A | **11,188 turns (11,724 steps)** | High-iteration pair programming |
-| **Cumulative Prompt Bloat Avoided** | 0 tokens (full burn) | **161,442,840 tokens** | **~161.4 million tokens preserved** |
-| **Cost Saved (Gemini Pro rate)** | $0.00 | **~$322.89 USD** | Calculated at $2.00 / 1M input tokens |
-| **Cost Saved (Gemini Ultra rate)** | $0.00 | **~$1,210.82 USD** | Calculated at $7.50 / 1M input tokens |
-| **Single-Session Endurance** | Context amnesia at step 80 - 90 | **2,928+ steps sustained** | **42.2M+ tokens saved in a single session** |
+| **Tracked Production Sessions** | N/A | **38 active sessions** | Measured across actual engineering projects |
+| **Total Model Turns Executed** | N/A | **11,588 turns (12,138 steps)** | High-iteration pair programming |
+| **Cumulative Prompt Bloat Avoided** | 0 tokens (full burn) | **167,214,840 tokens** | **~167.2 million tokens preserved** |
+| **Cost Saved (Gemini Pro rate)** | $0.00 | **~$334.43 USD** | Calculated at $2.00 / 1M input tokens |
+| **Cost Saved (Gemini Ultra rate)**| $0.00 | **~$1,254.11 USD** | Calculated at $7.50 / 1M input tokens |
+| **Single-Session Endurance** | Context amnesia at step 80 - 90 | **2,928+ steps sustained** | **40.5M+ tokens saved in a single session** |
+| **Code Refactoring Context Bloat** | Full file reload (~3,680 tokens) | **Codestral FIM Slicing (~310 tokens)** | **-91.6% context tokens per code edit** |
 | **Multi-Agent Write Contention** | SQLite locking errors (`WinError 32`) | **0 lock collisions** | Lock-free WriterQueue & append-only journals |
+| **Protocol Interoperability** | Antigravity plugins only | **Native MCP Server (stdio JSON-RPC)** | Universal support (AGY, Cursor, Continue, Claude) |
+| **Safety & Formatting Compliance** | None | **Zero-Friction Guardrails (`--fix`)** | 100% adherence (0 em-dashes, 0 emojis, 0 secret leaks) |
 | **Cross-Lingual Discovery** | Manual English keyword matching | **Zero-latency synonym synapses** | German tasks map seamlessly to English skills |
 
 > For full session endurance benchmarks, top session telemetry, and visual comparison charts, see the [Changelog](CHANGELOG.md).
