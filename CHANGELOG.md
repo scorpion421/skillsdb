@@ -89,7 +89,7 @@ flowchart TD
 ```mermaid
 xychart-beta
     title "Tokens Consumed for Single-Function Refactoring (Tokens)"
-    x-axis ["Legacy Whole File Dump (500 Lines)", "Claude Code Window", "OpenAI Patch Context", "SkillsDB v3.3 Codestral FIM"]
+    x-axis ["Full File", "Claude Code", "OpenAI Patch", "Codestral FIM"]
     y-axis "Context Tokens Consumed" 0 --> 4000
     bar [3680, 1850, 1420, 310]
 ```
@@ -98,8 +98,8 @@ xychart-beta
 
 ```mermaid
 xychart-beta
-    title "Tokens Preserved on Prompt Headers: Top 5 Longest Production Sessions (Million Tokens)"
-    x-axis ["Session #1 (2,928 steps)", "Session #2 (2,524 steps)", "Session #3 (1,450 steps)", "Session #4 (1,405 steps)", "Session #5 (1,343 steps)"]
+    title "Tokens Preserved on Prompt Headers: Top 5 Active Sessions (Million Tokens)"
+    x-axis ["Session #1", "Session #2", "Session #3", "Session #4", "Session #5"]
     y-axis "Million Tokens Preserved" 0 --> 45
     bar [40.58, 34.56, 20.42, 19.60, 18.82]
 ```
@@ -159,7 +159,7 @@ This benchmark is derived directly from live telemetry measured across **61 prod
 ```mermaid
 xychart-beta
     title "Startup Prompt Overhead per Turn (Tokens)"
-    x-axis ["Traditional Static Plugins", "SkillsDB v1.0", "SkillsDB v2.0", "SkillsDB v3.0", "SkillsDB v3.1", "SkillsDB v3.2", "SkillsDB v3.3"]
+    x-axis ["Static", "v1.0", "v2.0", "v3.0", "v3.1", "v3.2", "v3.3"]
     y-axis "Tokens per Turn" 0 --> 16000
     bar [14813, 382, 382, 382, 382, 382, 382]
 ```
@@ -182,8 +182,8 @@ xychart-beta
 
 ```mermaid
 xychart-beta
-    title "Tokens Burned on Prompt Headers: Top 5 Longest Production Sessions (Million Tokens)"
-    x-axis ["Session #1 (2,928 steps)", "Session #2 (2,104 steps)", "Session #3 (1,450 steps)", "Session #4 (1,405 steps)", "Session #5 (1,343 steps)"]
+    title "Tokens Burned on Prompt Headers: Top 5 Active Sessions (Million Tokens)"
+    x-axis ["Session #1", "Session #2", "Session #3", "Session #4", "Session #5"]
     y-axis "Million Tokens Burned Without SkillsDB" 0 --> 45
     bar [43.37, 31.17, 21.48, 20.81, 19.89]
 ```

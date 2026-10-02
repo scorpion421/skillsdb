@@ -87,30 +87,42 @@ flowchart TD
 ```mermaid
 xychart-beta
     title "Startup Prompt Overhead per Turn (Tokens)"
-    x-axis ["Traditional Static Plugins", "SkillsDB v1.0", "SkillsDB v2.0", "SkillsDB v3.0", "SkillsDB v3.1", "SkillsDB v3.2", "SkillsDB v3.3"]
+    x-axis ["Static", "v1.0", "v2.0", "v3.0", "v3.1", "v3.2", "v3.3"]
     y-axis "Tokens per Turn" 0 --> 16000
     bar [14813, 382, 382, 382, 382, 382, 382]
 ```
+
+> **Legend**: `Static` represents legacy eager plugin loading (~14,813 tokens/turn). `v1.0` through `v3.3` represent SkillsDB on-demand SQLite retrieval, permanently maintaining a minimal ~382 token overhead (**-97.4% reduction**) regardless of added features.
 
 ### 2. Context Footprint on Single-Function Code Refactoring
 
 ```mermaid
 xychart-beta
     title "Tokens Consumed for Single-Function Refactoring (Tokens)"
-    x-axis ["Legacy Whole File Dump (500 Lines)", "Claude Code Window", "OpenAI Patch Context", "SkillsDB v3.3 Codestral FIM"]
+    x-axis ["Full File", "Claude Code", "OpenAI Patch", "Codestral FIM"]
     y-axis "Context Tokens Consumed" 0 --> 4000
     bar [3680, 1850, 1420, 310]
 ```
+
+> **Legend**: `Full File` loads an entire 500-line module (~3,680 tokens). `Claude Code` uses windowed segment reads (~1,850 tokens). `OpenAI Patch` uses search/replace context blocks (~1,420 tokens). `Codestral FIM` in SkillsDB extracts surgical prefix/suffix bounds (~310 tokens, **-91.6% reduction**).
 
 ### 3. Real-World Session Endurance (Top 5 Active Production Sessions)
 
 ```mermaid
 xychart-beta
-    title "Tokens Preserved on Prompt Headers: Top 5 Longest Production Sessions (Million Tokens)"
-    x-axis ["Session #1 (2,928 steps)", "Session #2 (2,524 steps)", "Session #3 (1,450 steps)", "Session #4 (1,405 steps)", "Session #5 (1,343 steps)"]
+    title "Tokens Preserved on Prompt Headers: Top 5 Active Sessions (Million Tokens)"
+    x-axis ["Session #1", "Session #2", "Session #3", "Session #4", "Session #5"]
     y-axis "Million Tokens Preserved" 0 --> 45
     bar [40.58, 34.56, 20.42, 19.60, 18.82]
 ```
+
+| Session Rank | Session Conversation ID | Step Count | Tokens Preserved | Gemini Ultra Savings |
+| :--- | :--- | :--- | :--- | :--- |
+| **Session #1** | `600c990e-6a97...` | **2,928 steps** | **40,577,160 tokens** | **$304.33 USD** |
+| **Session #2** | `3462e5f1-caed...` | **2,524 steps** | **34,559,850 tokens** | **$259.20 USD** |
+| **Session #3** | `b495542f-51c7...` | **1,450 steps** | **20,418,450 tokens** | **$153.14 USD** |
+| **Session #4** | `4f7dd0cf-a615...` | **1,405 steps** | **19,595,940 tokens** | **$146.97 USD** |
+| **Session #5** | `4fab5c88-fea5...` | **1,343 steps** | **18,816,720 tokens** | **$141.13 USD** |
 
 ### 4. Quad-AI Frontier Feature Comparison Matrix
 
