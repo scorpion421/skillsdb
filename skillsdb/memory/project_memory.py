@@ -85,6 +85,17 @@ def init_project_db(conn: sqlite3.Connection):
     );
     """)
     cursor.execute("""
+    CREATE TABLE IF NOT EXISTS project_tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed', 'blocked')),
+        priority TEXT NOT NULL DEFAULT 'med' CHECK(priority IN ('low', 'med', 'high', 'critical')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    """)
+    cursor.execute("""
     CREATE VIRTUAL TABLE IF NOT EXISTS project_memory_fts USING fts5(
         source_table,
         title_or_key,
@@ -209,8 +220,219 @@ def mem_save_fact(conn: sqlite3.Connection, key: str, value: str, db_path: Path 
     print(f"Project fact saved: '{key}' = '{value}'")
 
 
+def mem_task_add(conn: sqlite3.Connection, title: str, description: str = "", priority: str = "med", status: str = "pending", db_path: Path = None):
+    """Adds a new task to the project task board."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    priority = (priority or "med").lower()
+    if priority not in ('low', 'med', 'high', 'critical'):
+        priority = 'med'
+    status = (status or "pending").lower()
+    if status not in ('pending', 'in_progress', 'completed', 'blocked'):
+        status = 'pending'
+
+    target_path = db_path or (Path(conn.cursor().execute("PRAGMA database_list;").fetchone()[2]) if conn else None)
+    if target_path and Path(target_path).exists():
+        wq = get_writer_queue(target_path)
+        def _write(cur):
+            cur.execute("""
+            INSERT INTO project_tasks (title, description, status, priority, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?);
+            """, (title, description or "", status, priority, now_iso, now_iso))
+            row_id = cur.lastrowid
+            cur.execute("""
+            INSERT INTO project_memory_fts (source_table, title_or_key, content)
+            VALUES ('task', ?, ?);
+            """, (f"Task #{row_id}: {title}", f"{status} {priority} {description or ''}"))
+            return row_id
+        row_id = wq.execute_write(_write)
+        print(f"Task created (ID {row_id}): [{status.upper()}] ({priority.upper()}) '{title}'")
+        return row_id
+
+    cursor = conn.cursor()
+    cursor.execute("""
+    INSERT INTO project_tasks (title, description, status, priority, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?);
+    """, (title, description or "", status, priority, now_iso, now_iso))
+    row_id = cursor.lastrowid
+    cursor.execute("""
+    INSERT INTO project_memory_fts (source_table, title_or_key, content)
+    VALUES ('task', ?, ?);
+    """, (f"Task #{row_id}: {title}", f"{status} {priority} {description or ''}"))
+    conn.commit()
+    print(f"Task created (ID {row_id}): [{status.upper()}] ({priority.upper()}) '{title}'")
+    return row_id
+
+
+def mem_task_update(conn: sqlite3.Connection, task_id: int, status: str = None, priority: str = None, title: str = None, description: str = None, db_path: Path = None):
+    """Updates the status, priority, title, or description of a task."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, title, description, status, priority FROM project_tasks WHERE id = ?;", (task_id,))
+    row = cursor.fetchone()
+    if not row:
+        print(f"Error: Task ID {task_id} not found.")
+        return False
+
+    new_title = title if title is not None else row["title"]
+    new_desc = description if description is not None else row["description"]
+    new_status = status.lower() if status else row["status"]
+    new_priority = priority.lower() if priority else row["priority"]
+
+    if new_status not in ('pending', 'in_progress', 'completed', 'blocked'):
+        print(f"Error: Invalid status '{new_status}'. Allowed: pending, in_progress, completed, blocked")
+        return False
+    if new_priority not in ('low', 'med', 'high', 'critical'):
+        print(f"Error: Invalid priority '{new_priority}'. Allowed: low, med, high, critical")
+        return False
+
+    target_path = db_path or (Path(conn.cursor().execute("PRAGMA database_list;").fetchone()[2]) if conn else None)
+    if target_path and Path(target_path).exists():
+        wq = get_writer_queue(target_path)
+        def _write(cur):
+            cur.execute("""
+            UPDATE project_tasks
+            SET title = ?, description = ?, status = ?, priority = ?, updated_at = ?
+            WHERE id = ?;
+            """, (new_title, new_desc, new_status, new_priority, now_iso, task_id))
+            cur.execute("""
+            INSERT INTO project_memory_fts (source_table, title_or_key, content)
+            VALUES ('task', ?, ?);
+            """, (f"Task #{task_id}: {new_title}", f"{new_status} {new_priority} {new_desc}"))
+        wq.execute_write(_write)
+    else:
+        cursor.execute("""
+        UPDATE project_tasks
+        SET title = ?, description = ?, status = ?, priority = ?, updated_at = ?
+        WHERE id = ?;
+        """, (new_title, new_desc, new_status, new_priority, now_iso, task_id))
+        cursor.execute("""
+        INSERT INTO project_memory_fts (source_table, title_or_key, content)
+        VALUES ('task', ?, ?);
+        """, (f"Task #{task_id}: {new_title}", f"{new_status} {new_priority} {new_desc}"))
+        conn.commit()
+
+    status_change = f" -> [{new_status.upper()}]" if status else ""
+    print(f"Task updated (ID {task_id}){status_change}: '{new_title}'")
+    return True
+
+
+def mem_task_list(conn: sqlite3.Connection, status: str = None, as_json: bool = False):
+    """Lists tasks filtered by status (or all active tasks by default)."""
+    cursor = conn.cursor()
+    params = []
+    query = "SELECT id, title, description, status, priority, created_at, updated_at FROM project_tasks"
+    if status and status.lower() != "all":
+        query += " WHERE status = ?"
+        params.append(status.lower())
+    query += """
+    ORDER BY 
+        CASE status WHEN 'in_progress' THEN 1 WHEN 'pending' THEN 2 WHEN 'blocked' THEN 3 ELSE 4 END,
+        CASE priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'med' THEN 3 ELSE 4 END,
+        id ASC;
+    """
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+
+    if as_json:
+        data = [dict(r) for r in rows]
+        print(json.dumps(data, indent=2))
+        return
+
+    filter_info = f" (Filter: {status.upper()})" if status else ""
+    print(f"\n=== PROJECT TASK BOARD{filter_info} ({len(rows)} tasks) ===")
+    if not rows:
+        print("  No tasks found.")
+    else:
+        for r in rows:
+            stat = r['status'].upper()
+            prio = r['priority'].upper()
+            desc = f" - {r['description']}" if r['description'] else ""
+            print(f"  [#{r['id']}] [{stat:11}] ({prio:8}) {r['title']}{desc}")
+    print("=====================================================\n")
+
+
+def mem_task_clear(conn: sqlite3.Connection, only_completed: bool = True, db_path: Path = None):
+    """Clears completed tasks (or all tasks)."""
+    target_path = db_path or (Path(conn.cursor().execute("PRAGMA database_list;").fetchone()[2]) if conn else None)
+    if target_path and Path(target_path).exists():
+        wq = get_writer_queue(target_path)
+        def _write(cur):
+            if only_completed:
+                cur.execute("DELETE FROM project_tasks WHERE status = 'completed';")
+            else:
+                cur.execute("DELETE FROM project_tasks;")
+            return cur.rowcount
+        deleted = wq.execute_write(_write)
+    else:
+        cursor = conn.cursor()
+        if only_completed:
+            cursor.execute("DELETE FROM project_tasks WHERE status = 'completed';")
+        else:
+            cursor.execute("DELETE FROM project_tasks;")
+        deleted = cursor.rowcount
+        conn.commit()
+
+    target_str = "completed tasks" if only_completed else "all tasks"
+    print(f"Cleared {deleted} {target_str} from project task board.")
+
+
+def mem_compact(conn: sqlite3.Connection, summary: str = None, next_steps: str = None, archive_completed: bool = True, project_root: Path = None, db_path: Path = None):
+    """Compacts episodic project memory into a distilled snapshot and vacuums DB."""
+    root = project_root or find_project_root()
+    flush_journals(root, conn)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT COUNT(*) FROM project_tasks WHERE status = 'completed';")
+    completed_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM project_tasks WHERE status IN ('pending', 'in_progress', 'blocked');")
+    active_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM project_decisions WHERE is_active = 1;")
+    decisions_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM project_facts;")
+    facts_count = cursor.fetchone()[0]
+
+    cid = os.environ.get("ANTIGRAVITY_CONVERSATION_ID") or "default"
+
+    default_summary = (
+        f"[AUTO-COMPACTED] Project context consolidated. "
+        f"{active_count} active tasks, {decisions_count} architectural decisions, {facts_count} facts."
+    )
+    snap_summary = summary or default_summary
+
+    target_path = db_path or (Path(cursor.execute("PRAGMA database_list;").fetchone()[2]) if conn else None)
+
+    if archive_completed and completed_count > 0:
+        if target_path and Path(target_path).exists():
+            wq = get_writer_queue(target_path)
+            def _write_del(cur):
+                cur.execute("DELETE FROM project_tasks WHERE status = 'completed';")
+                return cur.rowcount
+            wq.execute_write(_write_del)
+        else:
+            cursor.execute("DELETE FROM project_tasks WHERE status = 'completed';")
+            conn.commit()
+
+    mem_save_snapshot(conn, snap_summary, conversation_id=cid, next_steps=next_steps, db_path=target_path)
+
+    try:
+        conn.execute("PRAGMA incremental_vacuum;")
+        conn.commit()
+    except Exception:
+        pass
+
+    print("\n=== SESSION AUTO-COMPACTION COMPLETED ===")
+    print(f"  Summary:          {snap_summary}")
+    if next_steps:
+        print(f"  Next Steps:       {next_steps}")
+    print(f"  Active Tasks:     {active_count}")
+    print(f"  Completed Pruned: {completed_count if archive_completed else 0}")
+    print(f"  Active Decisions: {decisions_count}")
+    print(f"  Active Facts:     {facts_count}")
+    print("=========================================\n")
+
+
 def mem_get_context(conn: sqlite3.Connection, max_decisions: int = 5, project_root: Path = None):
-    """Outputs compact context: active architectural decisions, facts, and latest snapshot."""
+    """Outputs compact context: active architectural decisions, facts, open tasks, and latest snapshot."""
     root = project_root or find_project_root()
     flush_journals(root, conn)
     cursor = conn.cursor()
@@ -224,6 +446,20 @@ def mem_get_context(conn: sqlite3.Connection, max_decisions: int = 5, project_ro
         print(f"  Summary:    {last_snap['summary']}")
         if last_snap['next_steps']:
             print(f"  Next Steps: {last_snap['next_steps']}")
+
+    cursor.execute("""
+    SELECT id, title, status, priority FROM project_tasks
+    WHERE status IN ('pending', 'in_progress', 'blocked')
+    ORDER BY 
+        CASE status WHEN 'in_progress' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END,
+        CASE priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'med' THEN 3 ELSE 4 END,
+        id ASC;
+    """)
+    open_tasks = cursor.fetchall()
+    if open_tasks:
+        print("\nActive Task Board:")
+        for t in open_tasks:
+            print(f"  * [#{t['id']}] [{t['status'].upper():11}] ({t['priority'].upper():8}): {t['title']}")
 
     cursor.execute("""
     SELECT title, content, category FROM project_decisions
@@ -242,7 +478,7 @@ def mem_get_context(conn: sqlite3.Connection, max_decisions: int = 5, project_ro
         for f in facts:
             print(f"  * {f['key']}: {f['value']}")
 
-    if not last_snap and not decisions and not facts:
+    if not last_snap and not decisions and not facts and not open_tasks:
         print("No memory records found in project database.")
     print("==============================\n")
 

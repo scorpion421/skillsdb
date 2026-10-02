@@ -33,6 +33,11 @@ from .memory.project_memory import (
     mem_save_decision,
     mem_save_snapshot,
     mem_save_fact,
+    mem_task_add,
+    mem_task_update,
+    mem_task_list,
+    mem_task_clear,
+    mem_compact,
     mem_get_context,
     mem_search,
     mem_prune,
@@ -97,6 +102,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     suggest_parser = subparsers.add_parser("suggest", help="Auto-recommend relevant skills for a user task")
     suggest_parser.add_argument("task", help="Description of the task")
+    suggest_parser.add_argument("--cwd", default=None, help="Working directory path for directory-scoped recommendations")
     suggest_parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     import_file_parser = subparsers.add_parser("import-file", help="Import any markdown skill or rule file")
@@ -140,6 +146,36 @@ def build_parser() -> argparse.ArgumentParser:
     mem_fact_parser.add_argument("key", help="Fact key")
     mem_fact_parser.add_argument("value", help="Fact value")
     mem_fact_parser.add_argument("--project", default=None, help="Project root directory (optional)")
+
+    mem_task_add_parser = subparsers.add_parser("mem-task-add", help="Add a task to the project task board")
+    mem_task_add_parser.add_argument("title", help="Task title")
+    mem_task_add_parser.add_argument("--desc", default="", help="Task description")
+    mem_task_add_parser.add_argument("--priority", choices=["low", "med", "high", "critical"], default="med", help="Priority (default: med)")
+    mem_task_add_parser.add_argument("--status", choices=["pending", "in_progress", "completed", "blocked"], default="pending", help="Status (default: pending)")
+    mem_task_add_parser.add_argument("--project", default=None, help="Project root directory (optional)")
+
+    mem_task_update_parser = subparsers.add_parser("mem-task-update", help="Update task status, priority, or details")
+    mem_task_update_parser.add_argument("id", type=int, help="Task ID")
+    mem_task_update_parser.add_argument("--status", choices=["pending", "in_progress", "completed", "blocked"], default=None, help="New status")
+    mem_task_update_parser.add_argument("--priority", choices=["low", "med", "high", "critical"], default=None, help="New priority")
+    mem_task_update_parser.add_argument("--title", default=None, help="Updated title")
+    mem_task_update_parser.add_argument("--desc", default=None, help="Updated description")
+    mem_task_update_parser.add_argument("--project", default=None, help="Project root directory (optional)")
+
+    mem_task_list_parser = subparsers.add_parser("mem-task-list", help="List tasks from the project task board")
+    mem_task_list_parser.add_argument("--status", default=None, help="Filter by status (pending, in_progress, completed, blocked, all)")
+    mem_task_list_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    mem_task_list_parser.add_argument("--project", default=None, help="Project root directory (optional)")
+
+    mem_task_clear_parser = subparsers.add_parser("mem-task-clear", help="Clear completed tasks from task board")
+    mem_task_clear_parser.add_argument("--all", action="store_true", help="Clear all tasks, not just completed")
+    mem_task_clear_parser.add_argument("--project", default=None, help="Project root directory (optional)")
+
+    mem_compact_parser = subparsers.add_parser("mem-compact", help="Compact episodic project memory and vacuum database")
+    mem_compact_parser.add_argument("--summary", default=None, help="Optional custom summary for compacted snapshot")
+    mem_compact_parser.add_argument("--next-steps", default=None, help="Optional next steps to record")
+    mem_compact_parser.add_argument("--keep-completed", action="store_true", help="Do not prune completed tasks during compaction")
+    mem_compact_parser.add_argument("--project", default=None, help="Project root directory (optional)")
 
     mem_ctx_parser = subparsers.add_parser("mem-get-context", help="Retrieve compact project context")
     mem_ctx_parser.add_argument("--project", default=None, help="Project root directory (optional)")
@@ -209,6 +245,16 @@ def main(argv: list[str] = None):
             mem_save_snapshot(pconn, args.summary, conversation_id=args.cid, next_steps=args.next_steps, files_touched=args.files)
         elif args.command == "mem-save-fact":
             mem_save_fact(pconn, args.key, args.value)
+        elif args.command == "mem-task-add":
+            mem_task_add(pconn, args.title, description=args.desc, priority=args.priority, status=args.status)
+        elif args.command == "mem-task-update":
+            mem_task_update(pconn, args.id, status=args.status, priority=args.priority, title=args.title, description=args.desc)
+        elif args.command == "mem-task-list":
+            mem_task_list(pconn, status=args.status, as_json=args.json)
+        elif args.command == "mem-task-clear":
+            mem_task_clear(pconn, only_completed=not getattr(args, "all", False))
+        elif args.command == "mem-compact":
+            mem_compact(pconn, summary=args.summary, next_steps=args.next_steps, archive_completed=not getattr(args, "keep_completed", False), project_root=proj_root)
         elif args.command == "mem-get-context":
             mem_get_context(pconn, project_root=proj_root)
         elif args.command == "mem-search":
@@ -248,7 +294,7 @@ def main(argv: list[str] = None):
     elif args.command == "search":
         search(conn, args.query)
     elif args.command == "suggest":
-        suggest_skills(conn, args.task, as_json=args.json)
+        suggest_skills(conn, args.task, as_json=args.json, cwd_path=Path(args.cwd) if getattr(args, "cwd", None) else None)
     elif args.command == "import-file":
         import_file(conn, args.file_path)
     elif args.command == "remove":

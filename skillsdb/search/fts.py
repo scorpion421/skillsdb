@@ -11,9 +11,40 @@ from ..core.concurrency import extract_skill_sections
 from .synonyms import expand_query_with_synonyms
 
 
-def suggest_skills(conn: sqlite3.Connection, task_description: str, limit: int = 3, as_json: bool = False):
-    """Auto-recommends relevant workflow skills using multilingual synonym-expanded FTS5 ranking."""
+def detect_cwd_hints(cwd_path: Path = None) -> list[str]:
+    """Detects domain hints from current working directory path and project markers."""
+    cwd = (cwd_path or Path.cwd()).resolve()
+    hints = []
+    path_str = str(cwd).lower()
+    parts = [p.lower() for p in cwd.parts]
+    if "flutter" in path_str or "lib" in parts or (cwd / "pubspec.yaml").exists():
+        hints.extend(["flutter", "dart", "widget"])
+    if "data" in path_str or "sql" in parts or "bigquery" in path_str or (cwd / "dbt_project.yml").exists():
+        hints.extend(["bigquery", "sql", "data", "dbt"])
+    if "docker" in path_str or (cwd / "Dockerfile").exists() or (cwd / "compose.yaml").exists():
+        hints.extend(["docker", "container"])
+    if "android" in path_str or (cwd / "build.gradle").exists() or (cwd / "build.gradle.kts").exists():
+        hints.extend(["android", "kotlin", "gradle"])
+    if "web" in path_str or "frontend" in parts or (cwd / "package.json").exists():
+        hints.extend(["web", "ui", "frontend"])
+    if "firebase" in path_str or (cwd / "firebase.json").exists():
+        hints.extend(["firebase", "firestore"])
+    if "security" in path_str or "admin" in path_str:
+        hints.extend(["admin", "security"])
+    return list(dict.fromkeys(hints))
+
+
+def suggest_skills(conn: sqlite3.Connection, task_description: str, limit: int = 3, as_json: bool = False, cwd_path: Path = None):
+    """Auto-recommends relevant workflow skills using multilingual synonym-expanded FTS5 ranking and directory scoping."""
     words = expand_query_with_synonyms(task_description, conn)
+
+    # Blend in directory scoping hints
+    cwd_hints = detect_cwd_hints(cwd_path)
+    if cwd_hints:
+        for h in cwd_hints:
+            if h not in words:
+                words.append(h)
+
     if not words:
         if as_json:
             print("[]")
@@ -39,7 +70,8 @@ def suggest_skills(conn: sqlite3.Connection, task_description: str, limit: int =
         print(json.dumps(result, indent=2))
         return
 
-    print(f"\n--- Recommended Skills for: '{task_description}' ---\n")
+    scope_banner = f" [Directory Scope: {', '.join(cwd_hints)}]" if cwd_hints else ""
+    print(f"\n--- Recommended Skills for: '{task_description}'{scope_banner} ---\n")
     if not matches:
         print("No specific workflow skills matched this task.")
         return

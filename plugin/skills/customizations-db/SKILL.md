@@ -82,6 +82,17 @@ Each project maintains its own isolated SQLite memory database with FTS5 search 
   ```powershell
   skillsdb mem-save-snapshot "<summary>" --next-steps "<next>"
   ```
+* **Task State Machine (Task Board)**:
+  ```powershell
+  skillsdb mem-task-add "<title>" --priority high --status in_progress
+  skillsdb mem-task-list [--status in_progress|pending|completed]
+  skillsdb mem-task-update <id> --status completed
+  skillsdb mem-task-clear
+  ```
+* **Autonomous Context Compaction**:
+  ```powershell
+  skillsdb mem-compact --summary "<milestone summary>" --next-steps "<next objectives>"
+  ```
 * **Search Project Memory**:
   ```powershell
   skillsdb mem-search "<query>"

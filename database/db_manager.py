@@ -42,7 +42,7 @@ if sys.platform == "win32":
 # SECTION: skillsdb.config
 # =====================================================================
 # Ensure UTF-8 output encoding across Windows PowerShell and CMD
-__version__ = "3.0.0"
+__version__ = "3.1.0"
 
 # Model capability tiers
 TIER_LEAN = "lean"          # Gemini Flash, Flash-Lite, micro-skills, minimal token footprint
@@ -952,9 +952,40 @@ def fix_utf8(check_only: bool = False):
 # =====================================================================
 # SECTION: skillsdb.search.fts
 # =====================================================================
-def suggest_skills(conn: sqlite3.Connection, task_description: str, limit: int = 3, as_json: bool = False):
-    """Auto-recommends relevant workflow skills using multilingual synonym-expanded FTS5 ranking."""
+def detect_cwd_hints(cwd_path: Path = None) -> list[str]:
+    """Detects domain hints from current working directory path and project markers."""
+    cwd = (cwd_path or Path.cwd()).resolve()
+    hints = []
+    path_str = str(cwd).lower()
+    parts = [p.lower() for p in cwd.parts]
+    if "flutter" in path_str or "lib" in parts or (cwd / "pubspec.yaml").exists():
+        hints.extend(["flutter", "dart", "widget"])
+    if "data" in path_str or "sql" in parts or "bigquery" in path_str or (cwd / "dbt_project.yml").exists():
+        hints.extend(["bigquery", "sql", "data", "dbt"])
+    if "docker" in path_str or (cwd / "Dockerfile").exists() or (cwd / "compose.yaml").exists():
+        hints.extend(["docker", "container"])
+    if "android" in path_str or (cwd / "build.gradle").exists() or (cwd / "build.gradle.kts").exists():
+        hints.extend(["android", "kotlin", "gradle"])
+    if "web" in path_str or "frontend" in parts or (cwd / "package.json").exists():
+        hints.extend(["web", "ui", "frontend"])
+    if "firebase" in path_str or (cwd / "firebase.json").exists():
+        hints.extend(["firebase", "firestore"])
+    if "security" in path_str or "admin" in path_str:
+        hints.extend(["admin", "security"])
+    return list(dict.fromkeys(hints))
+
+
+def suggest_skills(conn: sqlite3.Connection, task_description: str, limit: int = 3, as_json: bool = False, cwd_path: Path = None):
+    """Auto-recommends relevant workflow skills using multilingual synonym-expanded FTS5 ranking and directory scoping."""
     words = expand_query_with_synonyms(task_description, conn)
+
+    # Blend in directory scoping hints
+    cwd_hints = detect_cwd_hints(cwd_path)
+    if cwd_hints:
+        for h in cwd_hints:
+            if h not in words:
+                words.append(h)
+
     if not words:
         if as_json:
             print("[]")
@@ -980,7 +1011,8 @@ def suggest_skills(conn: sqlite3.Connection, task_description: str, limit: int =
         print(json.dumps(result, indent=2))
         return
 
-    print(f"\n--- Recommended Skills for: '{task_description}' ---\n")
+    scope_banner = f" [Directory Scope: {', '.join(cwd_hints)}]" if cwd_hints else ""
+    print(f"\n--- Recommended Skills for: '{task_description}'{scope_banner} ---\n")
     if not matches:
         print("No specific workflow skills matched this task.")
         return
@@ -1235,6 +1267,17 @@ def init_project_db(conn: sqlite3.Connection):
     );
     """)
     cursor.execute("""
+    CREATE TABLE IF NOT EXISTS project_tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed', 'blocked')),
+        priority TEXT NOT NULL DEFAULT 'med' CHECK(priority IN ('low', 'med', 'high', 'critical')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    """)
+    cursor.execute("""
     CREATE VIRTUAL TABLE IF NOT EXISTS project_memory_fts USING fts5(
         source_table,
         title_or_key,
@@ -1359,8 +1402,219 @@ def mem_save_fact(conn: sqlite3.Connection, key: str, value: str, db_path: Path 
     print(f"Project fact saved: '{key}' = '{value}'")
 
 
+def mem_task_add(conn: sqlite3.Connection, title: str, description: str = "", priority: str = "med", status: str = "pending", db_path: Path = None):
+    """Adds a new task to the project task board."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    priority = (priority or "med").lower()
+    if priority not in ('low', 'med', 'high', 'critical'):
+        priority = 'med'
+    status = (status or "pending").lower()
+    if status not in ('pending', 'in_progress', 'completed', 'blocked'):
+        status = 'pending'
+
+    target_path = db_path or (Path(conn.cursor().execute("PRAGMA database_list;").fetchone()[2]) if conn else None)
+    if target_path and Path(target_path).exists():
+        wq = get_writer_queue(target_path)
+        def _write(cur):
+            cur.execute("""
+            INSERT INTO project_tasks (title, description, status, priority, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?);
+            """, (title, description or "", status, priority, now_iso, now_iso))
+            row_id = cur.lastrowid
+            cur.execute("""
+            INSERT INTO project_memory_fts (source_table, title_or_key, content)
+            VALUES ('task', ?, ?);
+            """, (f"Task #{row_id}: {title}", f"{status} {priority} {description or ''}"))
+            return row_id
+        row_id = wq.execute_write(_write)
+        print(f"Task created (ID {row_id}): [{status.upper()}] ({priority.upper()}) '{title}'")
+        return row_id
+
+    cursor = conn.cursor()
+    cursor.execute("""
+    INSERT INTO project_tasks (title, description, status, priority, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?);
+    """, (title, description or "", status, priority, now_iso, now_iso))
+    row_id = cursor.lastrowid
+    cursor.execute("""
+    INSERT INTO project_memory_fts (source_table, title_or_key, content)
+    VALUES ('task', ?, ?);
+    """, (f"Task #{row_id}: {title}", f"{status} {priority} {description or ''}"))
+    conn.commit()
+    print(f"Task created (ID {row_id}): [{status.upper()}] ({priority.upper()}) '{title}'")
+    return row_id
+
+
+def mem_task_update(conn: sqlite3.Connection, task_id: int, status: str = None, priority: str = None, title: str = None, description: str = None, db_path: Path = None):
+    """Updates the status, priority, title, or description of a task."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, title, description, status, priority FROM project_tasks WHERE id = ?;", (task_id,))
+    row = cursor.fetchone()
+    if not row:
+        print(f"Error: Task ID {task_id} not found.")
+        return False
+
+    new_title = title if title is not None else row["title"]
+    new_desc = description if description is not None else row["description"]
+    new_status = status.lower() if status else row["status"]
+    new_priority = priority.lower() if priority else row["priority"]
+
+    if new_status not in ('pending', 'in_progress', 'completed', 'blocked'):
+        print(f"Error: Invalid status '{new_status}'. Allowed: pending, in_progress, completed, blocked")
+        return False
+    if new_priority not in ('low', 'med', 'high', 'critical'):
+        print(f"Error: Invalid priority '{new_priority}'. Allowed: low, med, high, critical")
+        return False
+
+    target_path = db_path or (Path(conn.cursor().execute("PRAGMA database_list;").fetchone()[2]) if conn else None)
+    if target_path and Path(target_path).exists():
+        wq = get_writer_queue(target_path)
+        def _write(cur):
+            cur.execute("""
+            UPDATE project_tasks
+            SET title = ?, description = ?, status = ?, priority = ?, updated_at = ?
+            WHERE id = ?;
+            """, (new_title, new_desc, new_status, new_priority, now_iso, task_id))
+            cur.execute("""
+            INSERT INTO project_memory_fts (source_table, title_or_key, content)
+            VALUES ('task', ?, ?);
+            """, (f"Task #{task_id}: {new_title}", f"{new_status} {new_priority} {new_desc}"))
+        wq.execute_write(_write)
+    else:
+        cursor.execute("""
+        UPDATE project_tasks
+        SET title = ?, description = ?, status = ?, priority = ?, updated_at = ?
+        WHERE id = ?;
+        """, (new_title, new_desc, new_status, new_priority, now_iso, task_id))
+        cursor.execute("""
+        INSERT INTO project_memory_fts (source_table, title_or_key, content)
+        VALUES ('task', ?, ?);
+        """, (f"Task #{task_id}: {new_title}", f"{new_status} {new_priority} {new_desc}"))
+        conn.commit()
+
+    status_change = f" -> [{new_status.upper()}]" if status else ""
+    print(f"Task updated (ID {task_id}){status_change}: '{new_title}'")
+    return True
+
+
+def mem_task_list(conn: sqlite3.Connection, status: str = None, as_json: bool = False):
+    """Lists tasks filtered by status (or all active tasks by default)."""
+    cursor = conn.cursor()
+    params = []
+    query = "SELECT id, title, description, status, priority, created_at, updated_at FROM project_tasks"
+    if status and status.lower() != "all":
+        query += " WHERE status = ?"
+        params.append(status.lower())
+    query += """
+    ORDER BY 
+        CASE status WHEN 'in_progress' THEN 1 WHEN 'pending' THEN 2 WHEN 'blocked' THEN 3 ELSE 4 END,
+        CASE priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'med' THEN 3 ELSE 4 END,
+        id ASC;
+    """
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+
+    if as_json:
+        data = [dict(r) for r in rows]
+        print(json.dumps(data, indent=2))
+        return
+
+    filter_info = f" (Filter: {status.upper()})" if status else ""
+    print(f"\n=== PROJECT TASK BOARD{filter_info} ({len(rows)} tasks) ===")
+    if not rows:
+        print("  No tasks found.")
+    else:
+        for r in rows:
+            stat = r['status'].upper()
+            prio = r['priority'].upper()
+            desc = f" - {r['description']}" if r['description'] else ""
+            print(f"  [#{r['id']}] [{stat:11}] ({prio:8}) {r['title']}{desc}")
+    print("=====================================================\n")
+
+
+def mem_task_clear(conn: sqlite3.Connection, only_completed: bool = True, db_path: Path = None):
+    """Clears completed tasks (or all tasks)."""
+    target_path = db_path or (Path(conn.cursor().execute("PRAGMA database_list;").fetchone()[2]) if conn else None)
+    if target_path and Path(target_path).exists():
+        wq = get_writer_queue(target_path)
+        def _write(cur):
+            if only_completed:
+                cur.execute("DELETE FROM project_tasks WHERE status = 'completed';")
+            else:
+                cur.execute("DELETE FROM project_tasks;")
+            return cur.rowcount
+        deleted = wq.execute_write(_write)
+    else:
+        cursor = conn.cursor()
+        if only_completed:
+            cursor.execute("DELETE FROM project_tasks WHERE status = 'completed';")
+        else:
+            cursor.execute("DELETE FROM project_tasks;")
+        deleted = cursor.rowcount
+        conn.commit()
+
+    target_str = "completed tasks" if only_completed else "all tasks"
+    print(f"Cleared {deleted} {target_str} from project task board.")
+
+
+def mem_compact(conn: sqlite3.Connection, summary: str = None, next_steps: str = None, archive_completed: bool = True, project_root: Path = None, db_path: Path = None):
+    """Compacts episodic project memory into a distilled snapshot and vacuums DB."""
+    root = project_root or find_project_root()
+    flush_journals(root, conn)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT COUNT(*) FROM project_tasks WHERE status = 'completed';")
+    completed_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM project_tasks WHERE status IN ('pending', 'in_progress', 'blocked');")
+    active_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM project_decisions WHERE is_active = 1;")
+    decisions_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM project_facts;")
+    facts_count = cursor.fetchone()[0]
+
+    cid = os.environ.get("ANTIGRAVITY_CONVERSATION_ID") or "default"
+
+    default_summary = (
+        f"[AUTO-COMPACTED] Project context consolidated. "
+        f"{active_count} active tasks, {decisions_count} architectural decisions, {facts_count} facts."
+    )
+    snap_summary = summary or default_summary
+
+    target_path = db_path or (Path(cursor.execute("PRAGMA database_list;").fetchone()[2]) if conn else None)
+
+    if archive_completed and completed_count > 0:
+        if target_path and Path(target_path).exists():
+            wq = get_writer_queue(target_path)
+            def _write_del(cur):
+                cur.execute("DELETE FROM project_tasks WHERE status = 'completed';")
+                return cur.rowcount
+            wq.execute_write(_write_del)
+        else:
+            cursor.execute("DELETE FROM project_tasks WHERE status = 'completed';")
+            conn.commit()
+
+    mem_save_snapshot(conn, snap_summary, conversation_id=cid, next_steps=next_steps, db_path=target_path)
+
+    try:
+        conn.execute("PRAGMA incremental_vacuum;")
+        conn.commit()
+    except Exception:
+        pass
+
+    print("\n=== SESSION AUTO-COMPACTION COMPLETED ===")
+    print(f"  Summary:          {snap_summary}")
+    if next_steps:
+        print(f"  Next Steps:       {next_steps}")
+    print(f"  Active Tasks:     {active_count}")
+    print(f"  Completed Pruned: {completed_count if archive_completed else 0}")
+    print(f"  Active Decisions: {decisions_count}")
+    print(f"  Active Facts:     {facts_count}")
+    print("=========================================\n")
+
+
 def mem_get_context(conn: sqlite3.Connection, max_decisions: int = 5, project_root: Path = None):
-    """Outputs compact context: active architectural decisions, facts, and latest snapshot."""
+    """Outputs compact context: active architectural decisions, facts, open tasks, and latest snapshot."""
     root = project_root or find_project_root()
     flush_journals(root, conn)
     cursor = conn.cursor()
@@ -1374,6 +1628,20 @@ def mem_get_context(conn: sqlite3.Connection, max_decisions: int = 5, project_ro
         print(f"  Summary:    {last_snap['summary']}")
         if last_snap['next_steps']:
             print(f"  Next Steps: {last_snap['next_steps']}")
+
+    cursor.execute("""
+    SELECT id, title, status, priority FROM project_tasks
+    WHERE status IN ('pending', 'in_progress', 'blocked')
+    ORDER BY 
+        CASE status WHEN 'in_progress' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END,
+        CASE priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'med' THEN 3 ELSE 4 END,
+        id ASC;
+    """)
+    open_tasks = cursor.fetchall()
+    if open_tasks:
+        print("\nActive Task Board:")
+        for t in open_tasks:
+            print(f"  * [#{t['id']}] [{t['status'].upper():11}] ({t['priority'].upper():8}): {t['title']}")
 
     cursor.execute("""
     SELECT title, content, category FROM project_decisions
@@ -1392,7 +1660,7 @@ def mem_get_context(conn: sqlite3.Connection, max_decisions: int = 5, project_ro
         for f in facts:
             print(f"  * {f['key']}: {f['value']}")
 
-    if not last_snap and not decisions and not facts:
+    if not last_snap and not decisions and not facts and not open_tasks:
         print("No memory records found in project database.")
     print("==============================\n")
 
@@ -2182,6 +2450,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     suggest_parser = subparsers.add_parser("suggest", help="Auto-recommend relevant skills for a user task")
     suggest_parser.add_argument("task", help="Description of the task")
+    suggest_parser.add_argument("--cwd", default=None, help="Working directory path for directory-scoped recommendations")
     suggest_parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     import_file_parser = subparsers.add_parser("import-file", help="Import any markdown skill or rule file")
@@ -2225,6 +2494,36 @@ def build_parser() -> argparse.ArgumentParser:
     mem_fact_parser.add_argument("key", help="Fact key")
     mem_fact_parser.add_argument("value", help="Fact value")
     mem_fact_parser.add_argument("--project", default=None, help="Project root directory (optional)")
+
+    mem_task_add_parser = subparsers.add_parser("mem-task-add", help="Add a task to the project task board")
+    mem_task_add_parser.add_argument("title", help="Task title")
+    mem_task_add_parser.add_argument("--desc", default="", help="Task description")
+    mem_task_add_parser.add_argument("--priority", choices=["low", "med", "high", "critical"], default="med", help="Priority (default: med)")
+    mem_task_add_parser.add_argument("--status", choices=["pending", "in_progress", "completed", "blocked"], default="pending", help="Status (default: pending)")
+    mem_task_add_parser.add_argument("--project", default=None, help="Project root directory (optional)")
+
+    mem_task_update_parser = subparsers.add_parser("mem-task-update", help="Update task status, priority, or details")
+    mem_task_update_parser.add_argument("id", type=int, help="Task ID")
+    mem_task_update_parser.add_argument("--status", choices=["pending", "in_progress", "completed", "blocked"], default=None, help="New status")
+    mem_task_update_parser.add_argument("--priority", choices=["low", "med", "high", "critical"], default=None, help="New priority")
+    mem_task_update_parser.add_argument("--title", default=None, help="Updated title")
+    mem_task_update_parser.add_argument("--desc", default=None, help="Updated description")
+    mem_task_update_parser.add_argument("--project", default=None, help="Project root directory (optional)")
+
+    mem_task_list_parser = subparsers.add_parser("mem-task-list", help="List tasks from the project task board")
+    mem_task_list_parser.add_argument("--status", default=None, help="Filter by status (pending, in_progress, completed, blocked, all)")
+    mem_task_list_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    mem_task_list_parser.add_argument("--project", default=None, help="Project root directory (optional)")
+
+    mem_task_clear_parser = subparsers.add_parser("mem-task-clear", help="Clear completed tasks from task board")
+    mem_task_clear_parser.add_argument("--all", action="store_true", help="Clear all tasks, not just completed")
+    mem_task_clear_parser.add_argument("--project", default=None, help="Project root directory (optional)")
+
+    mem_compact_parser = subparsers.add_parser("mem-compact", help="Compact episodic project memory and vacuum database")
+    mem_compact_parser.add_argument("--summary", default=None, help="Optional custom summary for compacted snapshot")
+    mem_compact_parser.add_argument("--next-steps", default=None, help="Optional next steps to record")
+    mem_compact_parser.add_argument("--keep-completed", action="store_true", help="Do not prune completed tasks during compaction")
+    mem_compact_parser.add_argument("--project", default=None, help="Project root directory (optional)")
 
     mem_ctx_parser = subparsers.add_parser("mem-get-context", help="Retrieve compact project context")
     mem_ctx_parser.add_argument("--project", default=None, help="Project root directory (optional)")
@@ -2294,6 +2593,16 @@ def main(argv: list[str] = None):
             mem_save_snapshot(pconn, args.summary, conversation_id=args.cid, next_steps=args.next_steps, files_touched=args.files)
         elif args.command == "mem-save-fact":
             mem_save_fact(pconn, args.key, args.value)
+        elif args.command == "mem-task-add":
+            mem_task_add(pconn, args.title, description=args.desc, priority=args.priority, status=args.status)
+        elif args.command == "mem-task-update":
+            mem_task_update(pconn, args.id, status=args.status, priority=args.priority, title=args.title, description=args.desc)
+        elif args.command == "mem-task-list":
+            mem_task_list(pconn, status=args.status, as_json=args.json)
+        elif args.command == "mem-task-clear":
+            mem_task_clear(pconn, only_completed=not getattr(args, "all", False))
+        elif args.command == "mem-compact":
+            mem_compact(pconn, summary=args.summary, next_steps=args.next_steps, archive_completed=not getattr(args, "keep_completed", False), project_root=proj_root)
         elif args.command == "mem-get-context":
             mem_get_context(pconn, project_root=proj_root)
         elif args.command == "mem-search":
@@ -2333,7 +2642,7 @@ def main(argv: list[str] = None):
     elif args.command == "search":
         search(conn, args.query)
     elif args.command == "suggest":
-        suggest_skills(conn, args.task, as_json=args.json)
+        suggest_skills(conn, args.task, as_json=args.json, cwd_path=Path(args.cwd) if getattr(args, "cwd", None) else None)
     elif args.command == "import-file":
         import_file(conn, args.file_path)
     elif args.command == "remove":
