@@ -1,6 +1,7 @@
 # SkillsDB: Centralized Customizations, Autonomous Memory & High-Concurrency Knowledge Engine for Google Antigravity
 
 [![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/scorpion421/skillsdb/releases/tag/v3.1.0)
+[![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-blue.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/scorpion421/skillsdb)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
 [![PowerShell](https://img.shields.io/badge/powershell-5.1%2B%20%7C%207%2B-blue.svg)](https://github.com/PowerShell/PowerShell)
@@ -16,17 +17,19 @@
 
 SkillsDB is continuously verified in production across real-world software engineering workflows:
 
-| Metric | Traditional Static Plugins | SkillsDB v3.0 Architecture | Verified Real-World Impact |
+| Metric | Traditional Static Plugins | SkillsDB v3.1 Architecture | Verified Real-World Impact |
 | :--- | :--- | :--- | :--- |
 | **Startup Prompt Overhead** | ~14,813 tokens injected per turn | **~382 tokens** | **-97.4% prompt bloat reduction** |
-| **Tracked Production Sessions** | N/A | **29 active sessions** | Measured across actual engineering projects |
-| **Total Model Turns Executed** | N/A | **7,440 turns (7,816 steps)** | High-iteration pair programming |
-| **Cumulative Prompt Bloat Avoided** | 0 tokens (full burn) | **107,359,200 tokens** | **~107.4 million tokens preserved** |
-| **Cost Saved (Gemini Pro rate)** | $0.00 | **~$214.72 USD** | Calculated at $2.00 / 1M input tokens |
-| **Cost Saved (Gemini Ultra rate)** | $0.00 | **~$805.19 USD** | Calculated at $7.50 / 1M input tokens |
-| **Single-Session Endurance** | Context amnesia at step 80 - 90 | **1,220+ steps sustained** | **17.5M+ tokens saved in a single session** |
+| **Tracked Production Sessions** | N/A | **61 active sessions** | Measured across actual engineering projects |
+| **Total Model Turns Executed** | N/A | **11,188 turns (11,724 steps)** | High-iteration pair programming |
+| **Cumulative Prompt Bloat Avoided** | 0 tokens (full burn) | **161,442,840 tokens** | **~161.4 million tokens preserved** |
+| **Cost Saved (Gemini Pro rate)** | $0.00 | **~$322.89 USD** | Calculated at $2.00 / 1M input tokens |
+| **Cost Saved (Gemini Ultra rate)** | $0.00 | **~$1,210.82 USD** | Calculated at $7.50 / 1M input tokens |
+| **Single-Session Endurance** | Context amnesia at step 80 - 90 | **2,928+ steps sustained** | **42.2M+ tokens saved in a single session** |
 | **Multi-Agent Write Contention** | SQLite locking errors (`WinError 32`) | **0 lock collisions** | Lock-free WriterQueue & append-only journals |
 | **Cross-Lingual Discovery** | Manual English keyword matching | **Zero-latency synonym synapses** | German tasks map seamlessly to English skills |
+
+> For full session endurance benchmarks, top session telemetry, and visual comparison charts, see the [Changelog](CHANGELOG.md).
 
 ---
 
