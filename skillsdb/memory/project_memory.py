@@ -54,7 +54,7 @@ def get_project_connection(project_root: Path = None) -> sqlite3.Connection:
 
 
 def init_project_db(conn: sqlite3.Connection):
-    """Initializes tables for architectural decisions, snapshots, and project facts."""
+    """Initializes tables for architectural decisions, snapshots, project facts, tasks, verifications, and handoffs."""
     cursor = conn.cursor()
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS project_decisions (
@@ -82,7 +82,27 @@ def init_project_db(conn: sqlite3.Connection):
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         key TEXT UNIQUE NOT NULL,
         value TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        deprecated_at TEXT DEFAULT NULL,
+        superseded_by TEXT DEFAULT NULL
+    );
+    """)
+    # Check if deprecated_at column exists in existing databases
+    cursor.execute("PRAGMA table_info(project_facts);")
+    cols = {row[1] for row in cursor.fetchall()}
+    if "deprecated_at" not in cols:
+        cursor.execute("ALTER TABLE project_facts ADD COLUMN deprecated_at TEXT DEFAULT NULL;")
+    if "superseded_by" not in cols:
+        cursor.execute("ALTER TABLE project_facts ADD COLUMN superseded_by TEXT DEFAULT NULL;")
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS fact_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT NOT NULL,
+        old_value TEXT,
+        new_value TEXT NOT NULL,
+        reason TEXT,
+        created_at TEXT NOT NULL
     );
     """)
     cursor.execute("""
@@ -92,6 +112,29 @@ def init_project_db(conn: sqlite3.Connection):
         description TEXT DEFAULT '',
         status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed', 'blocked')),
         priority TEXT NOT NULL DEFAULT 'med' CHECK(priority IN ('low', 'med', 'high', 'critical')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS task_verifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        task_id INTEGER NOT NULL,
+        verifier_type TEXT NOT NULL,
+        passed INTEGER NOT NULL,
+        details TEXT,
+        created_at TEXT NOT NULL
+    );
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS task_handoffs (
+        id TEXT PRIMARY KEY,
+        task_id INTEGER,
+        source_role TEXT NOT NULL DEFAULT 'lead',
+        target_role TEXT NOT NULL DEFAULT 'worker',
+        context_variables TEXT,
+        notes TEXT,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'completed', 'rejected')),
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     );
@@ -190,37 +233,141 @@ def mem_save_snapshot(conn: sqlite3.Connection, summary: str, conversation_id: s
         print(f"Session snapshot saved (ID {row_id}) for conversation: {cid}")
 
 
-def mem_save_fact(conn: sqlite3.Connection, key: str, value: str, db_path: Path = None):
-    """Saves a key-value fact or configuration item."""
+def mem_save_fact(conn: sqlite3.Connection, key: str, value: str, reason: str = None, db_path: Path = None):
+    """Saves a key-value fact or configuration item with active reconciliation and tombstone history."""
     now_iso = datetime.now(timezone.utc).isoformat()
     target_path = db_path or (Path(conn.cursor().execute("PRAGMA database_list;").fetchone()[2]) if conn else None)
+
+    cursor = conn.cursor() if conn else None
+    existing_val = None
+    if cursor:
+        try:
+            cursor.execute("SELECT value FROM project_facts WHERE key = ?;", (key,))
+            erow = cursor.fetchone()
+            if erow:
+                existing_val = erow[0]
+        except Exception:
+            pass
 
     if target_path and Path(target_path).exists():
         wq = get_writer_queue(target_path)
         def _write(cur):
+            cur.execute("SELECT value FROM project_facts WHERE key = ?;", (key,))
+            er = cur.fetchone()
+            if er and er[0] != value:
+                cur.execute("""
+                INSERT INTO fact_history (key, old_value, new_value, reason, created_at)
+                VALUES (?, ?, ?, ?, ?);
+                """, (key, er[0], value, reason or "superseded", now_iso))
             cur.execute("""
-            INSERT OR REPLACE INTO project_facts (key, value, updated_at)
-            VALUES (?, ?, ?);
+            INSERT OR REPLACE INTO project_facts (key, value, updated_at, deprecated_at, superseded_by)
+            VALUES (?, ?, ?, NULL, NULL);
             """, (key, value, now_iso))
             cur.execute("""
             INSERT INTO project_memory_fts (source_table, title_or_key, content)
             VALUES ('fact', ?, ?);
             """, (key, value))
         wq.execute_write(_write)
-        print(f"Project fact saved: '{key}' = '{value}'")
-        return
+    else:
+        if existing_val and existing_val != value:
+            cursor.execute("""
+            INSERT INTO fact_history (key, old_value, new_value, reason, created_at)
+            VALUES (?, ?, ?, ?, ?);
+            """, (key, existing_val, value, reason or "superseded", now_iso))
+        cursor.execute("""
+        INSERT OR REPLACE INTO project_facts (key, value, updated_at, deprecated_at, superseded_by)
+        VALUES (?, ?, ?, NULL, NULL);
+        """, (key, value, now_iso))
+        cursor.execute("""
+        INSERT INTO project_memory_fts (source_table, title_or_key, content)
+        VALUES ('fact', ?, ?);
+        """, (key, value))
+        conn.commit()
 
+    if existing_val and existing_val != value:
+        print(f"Project fact updated & reconciled: '{key}' = '{value}' (Previous: '{existing_val}' archived to history)")
+    else:
+        print(f"Project fact saved: '{key}' = '{value}'")
+
+
+def mem_deprecate_fact(conn: sqlite3.Connection, key: str, reason: str = "deprecated", db_path: Path = None):
+    """Marks a project fact as deprecated/tombstoned so it no longer pollutes the active LLM context."""
+    now_iso = datetime.now(timezone.utc).isoformat()
     cursor = conn.cursor()
-    cursor.execute("""
-    INSERT OR REPLACE INTO project_facts (key, value, updated_at)
-    VALUES (?, ?, ?);
-    """, (key, value, now_iso))
-    cursor.execute("""
-    INSERT INTO project_memory_fts (source_table, title_or_key, content)
-    VALUES ('fact', ?, ?);
-    """, (key, value))
-    conn.commit()
-    print(f"Project fact saved: '{key}' = '{value}'")
+    cursor.execute("SELECT value FROM project_facts WHERE key = ?;", (key,))
+    row = cursor.fetchone()
+    if not row:
+        print(f"Error: Fact '{key}' not found.")
+        return False
+
+    old_val = row[0]
+    target_path = db_path or (Path(conn.cursor().execute("PRAGMA database_list;").fetchone()[2]) if conn else None)
+    if target_path and Path(target_path).exists():
+        wq = get_writer_queue(target_path)
+        def _write(cur):
+            cur.execute("""
+            UPDATE project_facts SET deprecated_at = ? WHERE key = ?;
+            """, (now_iso, key))
+            cur.execute("""
+            INSERT INTO fact_history (key, old_value, new_value, reason, created_at)
+            VALUES (?, ?, ?, ?, ?);
+            """, (key, old_val, "[TOMBSTONE]", reason, now_iso))
+        wq.execute_write(_write)
+    else:
+        cursor.execute("""
+        UPDATE project_facts SET deprecated_at = ? WHERE key = ?;
+        """, (now_iso, key))
+        cursor.execute("""
+        INSERT INTO fact_history (key, old_value, new_value, reason, created_at)
+        VALUES (?, ?, ?, ?, ?);
+        """, (key, old_val, "[TOMBSTONE]", reason, now_iso))
+        conn.commit()
+
+    print(f"Project fact deprecated (tombstoned): '{key}' (Reason: {reason})")
+    return True
+
+
+def mem_fact_history(conn: sqlite3.Connection, key: str = None):
+    """Displays the audit trail of fact updates, supersessions, and tombstoning."""
+    cursor = conn.cursor()
+    query = "SELECT id, key, old_value, new_value, reason, created_at FROM fact_history"
+    params = []
+    if key:
+        query += " WHERE key = ?"
+        params.append(key)
+    query += " ORDER BY id DESC LIMIT 20;"
+
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    print(f"\n=== PROJECT FACT RECONCILIATION AUDIT LOG ({len(rows)} entries) ===")
+    if not rows:
+        print("  No fact history records found.")
+    else:
+        for r in rows:
+            print(f"  * [#{r['id']}] '{r['key']}': '{r['old_value']}' -> '{r['new_value']}' ({r['reason']}) [{r['created_at'][:19]}]")
+    print()
+
+
+def mem_reconcile(conn: sqlite3.Connection) -> dict:
+    """Scans and reports fact lifecycle health, active vs deprecated items, and history count."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM project_facts WHERE deprecated_at IS NULL;")
+    active_facts = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM project_facts WHERE deprecated_at IS NOT NULL;")
+    deprecated_facts = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM fact_history;")
+    history_events = cursor.fetchone()[0]
+
+    report = {
+        "active_facts": active_facts,
+        "deprecated_facts": deprecated_facts,
+        "history_reconciliation_events": history_events,
+    }
+    print(f"\n=== PROJECT FACT RECONCILIATION REPORT ===")
+    print(f"  Active Facts:       {active_facts}")
+    print(f"  Tombstoned Facts:   {deprecated_facts}")
+    print(f"  Reconciled Events:  {history_events}\n")
+    return report
 
 
 def mem_task_add(conn: sqlite3.Connection, title: str, description: str = "", priority: str = "med", status: str = "pending", db_path: Path = None):
@@ -391,7 +538,7 @@ def mem_compact(conn: sqlite3.Connection, summary: str = None, next_steps: str =
     active_count = cursor.fetchone()[0]
     cursor.execute("SELECT COUNT(*) FROM project_decisions WHERE is_active = 1;")
     decisions_count = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM project_facts;")
+    cursor.execute("SELECT COUNT(*) FROM project_facts WHERE deprecated_at IS NULL;")
     facts_count = cursor.fetchone()[0]
 
     cid = os.environ.get("ANTIGRAVITY_CONVERSATION_ID") or "default"
@@ -475,7 +622,7 @@ def mem_get_context(conn: sqlite3.Connection, max_decisions: int = 5, project_ro
         for d in decisions:
             print(f"  * [{d['category'].upper()}] {d['title']}: {d['content']}")
 
-    cursor.execute("SELECT key, value FROM project_facts ORDER BY updated_at DESC;")
+    cursor.execute("SELECT key, value FROM project_facts WHERE deprecated_at IS NULL ORDER BY updated_at DESC;")
     facts = cursor.fetchall()
     if facts:
         print("\nProject Facts & Configs:")
@@ -639,8 +786,19 @@ def handle_pre_invocation_hook():
                 for t in open_tasks:
                     mem_lines.append(f"  * [#{t['id']}] [{t['status'].upper():11}] ({t['priority'].upper():8}): {t['title']}")
 
-            # 4. Key Facts
-            cursor.execute("SELECT key, value FROM project_facts ORDER BY updated_at DESC LIMIT 10;")
+            # 3.5 Active Agent Handoffs
+            cursor.execute("SELECT id, source_role, target_role, notes FROM task_handoffs WHERE status = 'pending' ORDER BY created_at DESC LIMIT 3;")
+            pending_hos = cursor.fetchall()
+            if pending_hos:
+                if mem_lines:
+                    mem_lines.append("")
+                mem_lines.append("Pending Agent Handoffs (Delegation Queue):")
+                for ho in pending_hos:
+                    note_s = f" - '{ho['notes'][:60]}...'" if ho['notes'] else ""
+                    mem_lines.append(f"  * [{ho['id']}] [{ho['source_role']}] -> [{ho['target_role']}]{note_s}")
+
+            # 4. Key Facts (Active only, tombstoned excluded)
+            cursor.execute("SELECT key, value FROM project_facts WHERE deprecated_at IS NULL ORDER BY updated_at DESC LIMIT 10;")
             facts = cursor.fetchall()
             if facts:
                 if mem_lines:

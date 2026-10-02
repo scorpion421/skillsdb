@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.2.0] - 2026-10-02
+
+### The OpenAI Primitives Fusion (Guardrails, Agent Handoffs & Memory Tombstoning)
+
+This release fuses the standout agentic patterns from the **OpenAI Agents SDK**, **Swarm**, and **ChatGPT Memory** into SkillsDB, giving Google Antigravity deterministic safety verification, friction-free formatting remediation, scoped multi-agent delegation, and active memory conflict reconciliation.
+
+#### Key Innovations in v3.2.0:
+1. **Deterministic Guardrails & Auto-Fix Engine (`skillsdb guardrail check`)**:
+   - Inspired by OpenAI Agents SDK Guardrails.
+   - Detects forbidden em-dashes (U+2014), en-dashes (U+2013), emojis, German compound hyphenation (Deppenbindestriche), and credential leaks (OpenAI keys, GitHub PATs, AWS access keys, private key headers).
+   - **Zero Developer Friction**: Operates in permissive advisory mode by default without blocking workflows; includes `--fix` to auto-remediate formatting violations in-place.
+2. **Evaluator-Optimizer Task Verification Gates (`skillsdb guardrail verify-task`)**:
+   - Validates automated test assertion commands (e.g. `pytest`, `flutter test`, `unittest`) and guardrail compliance before permitting a task to transition to `completed`.
+   - Records verifiable execution audit proofs into `task_verifications` in `.agents/memory.db`.
+3. **Scoped Agent Handoff Protocol (`skillsdb handoff`)**:
+   - Inspired by OpenAI Swarm & Agents SDK Handoff Pattern.
+   - Eliminates bloated transcript duplication during multi-agent delegation by generating structured, filtered context handoffs (`context_variables`, target role, active task, relevant facts, and invariants).
+   - Complete lifecycle state machine (`pending`, `accepted`, `completed`, `rejected`) logged in `task_handoffs`.
+4. **Active Fact Reconciliation & Memory Tombstoning (`skillsdb mem-reconcile`, `mem-deprecate-fact`, `mem-fact-history`)**:
+   - Inspired by ChatGPT Personalized Memory lifecycle.
+   - Automatically detects fact updates and preserves prior values in an append-only `fact_history` audit table.
+   - Tombstoning (`deprecated_at`): Stale or deprecated facts are automatically filtered out from PreInvocation hooks and prompt context, preventing contradictory instructions.
+5. **Expanded Test Suite (36 Automated Tests)**:
+   - Added `tests/test_v3_2_openai_fusion.py`. All 36 unit tests pass with zero regressions.
+
+---
+
 ## [3.1.0] - 2026-10-02
 
 ### Real-World Production Benchmark & Head-to-Head Comparison (Verified Live Data)
@@ -17,9 +44,9 @@ This benchmark is derived directly from live telemetry measured across **61 prod
 ```mermaid
 xychart-beta
     title "Startup Prompt Overhead per Turn (Tokens)"
-    x-axis ["Traditional Static Plugins", "SkillsDB v1.0", "SkillsDB v2.0", "SkillsDB v3.0", "SkillsDB v3.1"]
+    x-axis ["Traditional Static Plugins", "SkillsDB v1.0", "SkillsDB v2.0", "SkillsDB v3.0", "SkillsDB v3.1", "SkillsDB v3.2"]
     y-axis "Tokens per Turn" 0 --> 16000
-    bar [14813, 382, 382, 382, 382]
+    bar [14813, 382, 382, 382, 382, 382]
 ```
 
 #### 2. Head-to-Head Architectural Comparison

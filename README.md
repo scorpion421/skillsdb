@@ -1,6 +1,6 @@
 # SkillsDB: Centralized Customizations, Autonomous Memory & High-Concurrency Knowledge Engine for Google Antigravity
 
-[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/scorpion421/skillsdb/releases/tag/v3.1.0)
+[![Version](https://img.shields.io/badge/version-3.2.0-blue.svg)](https://github.com/scorpion421/skillsdb/releases/tag/v3.2.0)
 [![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-blue.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/scorpion421/skillsdb)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
@@ -190,36 +190,39 @@ Running Gemini Ultra without SkillsDB severely handicaps model performance and e
 
 ---
 
-## Evolution & Generational Milestones: v1.0 vs. v2.0 vs. v3.0 vs. v3.1
+## Evolution & Generational Milestones: v1.0 vs. v2.0 vs. v3.0 vs. v3.1 vs. v3.2
 
-SkillsDB has evolved across four major engineering generations, advancing from an initial prompt-saving experiment into a hardened, high-concurrency enterprise knowledge and agent orchestration engine:
+SkillsDB has evolved across five major engineering generations, advancing from an initial prompt-saving experiment into a hardened, high-concurrency enterprise knowledge and agent orchestration engine:
 
 ```mermaid
 flowchart LR
     V1["SkillsDB v1.0\n(Foundation)\nDecoupling Prompt Bloat\n-97.4% Token Reduction"]
     V2["SkillsDB v2.0 & v2.3\n(Autonomous & Adaptive)\nEpisodic Memory (.agents/)\nMicro-Skills & Gemini Ultra"]
     V3["SkillsDB v3.0\n(Enterprise Hardened)\nModular Package & Bundler\nLock-Free WriterQueue\nMultilingual Synapses"]
-    V4["SkillsDB v3.1\n(Architecture Fusion)\nTask State Machine\nAuto-Compaction & CWD Scope\n30 Unit Tests"]
+    V4["SkillsDB v3.1\n(Architecture Fusion)\nTask State Machine\nAuto-Compaction & CWD Scope\n31 Unit Tests"]
+    V5["SkillsDB v3.2\n(OpenAI Primitives Fusion)\nGuardrails & Auto-Fix\nAgent Handoff Protocol\nMemory Tombstoning\n36 Unit Tests"]
 
     V1 -->|"Added memory & micro-skills"| V2
     V2 -->|"Added modularity & lock-free swarm"| V3
     V3 -->|"Added task state & auto-compaction"| V4
+    V4 -->|"Added guardrails, handoffs & tombstoning"| V5
 ```
 
 ### Generational Feature Matrix
 
-| Capability / Dimension | SkillsDB v1.0 (Foundation) | SkillsDB v2.0 & v2.3 (Autonomous & Adaptive) | SkillsDB v3.0 (Enterprise Hardened) | SkillsDB v3.1 (Architecture Fusion) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Codebase Architecture** | Monolithic script (~900 lines) | Monolithic script (~2,100 lines) | Modular 11-module package (`skillsdb/`) + automated single-file bundler | **Modular 11-module package + task state machine + auto-compaction engine** |
-| **Prompt Bloat Elimination** | **~382 tokens** (-97.4% per turn) | **~382 tokens** (-97.4% per turn) | **~382 tokens** (-97.4% per turn) | **~382 tokens** (-97.4% per turn) |
-| **Skill Retrieval Cost** | Full skill file dump (~2,500 tokens) | Micro-skills (`--section`, ~150 tokens) | Micro-skills + multilingual synonym expansion | **Micro-skills + directory scoping (`--cwd` path-aware hints)** |
-| **Cross-Lingual Discovery** | Exact English keywords only | Exact English keywords only | Zero-dependency synonym synapses (German -> English) | **Synonym synapses + automatic directory path context** |
-| **Multi-Agent Write Concurrency** | None (sequential only) | Standard SQLite WAL (risk of write lock) | Lock-free WriterQueue + append-only journals | **Lock-free WriterQueue across decisions, facts, and tasks** |
-| **Subagent Swarming Capacity** | 1 process at a time | 2 to 4 workers (read-only) | Up to 16 parallel subagents (concurrent reads/writes) | **Up to 16 parallel subagents (shared task boards & journals)** |
-| **Project Episodic Memory** | None (stateless across chats) | `.agents/memory.db` via PreInvocation hook | Autonomous memory + background writer queue | **Autonomous memory + Task State Machine (`project_tasks`)** |
-| **Deterministic Progress State** | Vague chat prose | Free-form milestone summaries | Free-form milestone summaries | **Deterministic Task States (`pending`, `in_progress`, `completed`, `blocked`)** |
-| **Context Compaction Engine** | None | Manual snapshot creation | Manual snapshot creation | **Autonomous session compaction (`mem-compact`) + completed task pruning** |
-| **Automated Test Suite** | 0 unit tests | 17 functional tests | 24 unit tests | **30 comprehensive unit tests (all passing)** |
+| Capability / Dimension | SkillsDB v1.0 (Foundation) | SkillsDB v2.0 & v2.3 (Autonomous & Adaptive) | SkillsDB v3.0 (Enterprise Hardened) | SkillsDB v3.1 (Architecture Fusion) | SkillsDB v3.2 (OpenAI Primitives Fusion) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Codebase Architecture** | Monolithic script (~900 lines) | Monolithic script (~2,100 lines) | Modular 11-module package (`skillsdb/`) + automated single-file bundler | Modular 11-module package + task state machine + auto-compaction | **Modular 13-module package + guardrail engine + handoffs** |
+| **Prompt Bloat Elimination** | **~382 tokens** (-97.4% per turn) | **~382 tokens** (-97.4% per turn) | **~382 tokens** (-97.4% per turn) | **~382 tokens** (-97.4% per turn) | **~382 tokens** (-97.4% per turn) |
+| **Skill Retrieval Cost** | Full skill file dump (~2,500 tokens) | Micro-skills (`--section`, ~150 tokens) | Micro-skills + multilingual synonym expansion | Micro-skills + directory scoping (`--cwd` path-aware hints) | **Micro-skills + directory scoping + scoped handoffs** |
+| **Cross-Lingual Discovery** | Exact English keywords only | Exact English keywords only | Zero-dependency synonym synapses (German -> English) | Synonym synapses + automatic directory path context | **Synonym synapses + path context + Deppenbindestrich guardrails** |
+| **Multi-Agent Write Concurrency** | None (sequential only) | Standard SQLite WAL (risk of write lock) | Lock-free WriterQueue + append-only journals | Lock-free WriterQueue across decisions, facts, and tasks | **Lock-free WriterQueue across tasks, handoffs, and verifications** |
+| **Subagent Swarming Capacity** | 1 process at a time | 2 to 4 workers (read-only) | Up to 16 parallel subagents (concurrent reads/writes) | Up to 16 parallel subagents (shared task boards & journals) | **16+ parallel workers + scoped Agent Handoffs (`context_variables`)** |
+| **Project Episodic Memory** | None (stateless across chats) | `.agents/memory.db` via PreInvocation hook | Autonomous memory + background writer queue | Autonomous memory + Task State Machine (`project_tasks`) | **Autonomous memory + Fact Tombstoning (`fact_history`)** |
+| **Deterministic Progress State** | Vague chat prose | Free-form milestone summaries | Free-form milestone summaries | Deterministic Task States (`pending`, `in_progress`, `completed`, `blocked`) | **Task States + Evaluator-Optimizer Task Verification Gates** |
+| **Context Compaction Engine** | None | Manual snapshot creation | Manual snapshot creation | Autonomous session compaction (`mem-compact`) + completed task pruning | **Auto-compaction + memory tombstoning + handoff lifecycle** |
+| **Safety & Verification** | None | None | None | None | **Deterministic Guardrails (`skillsdb guardrail`) + zero-friction auto-fix** |
+| **Automated Test Suite** | 0 unit tests | 17 functional tests | 24 unit tests | 31 unit tests | **36 comprehensive unit tests (all passing)** |
 
 ### Generational Breakdown
 
@@ -241,11 +244,19 @@ flowchart LR
 
 #### SkillsDB v3.1: Architecture Fusion (Task State Machine, Auto-Compaction & Directory Scoping)
 * **Core Innovation**:
-  1. **Deterministic Task State Machine**: Integrated `project_tasks` table in `.agents/memory.db` with strict state transitions (`pending`, `in_progress`, `completed`, `blocked`), priority weighting, and FTS indexing. Eliminates vage prose goals and keeps multi-step agent refactorings strictly on track.
+  1. **Deterministic Task State Machine**: Integrated `project_tasks` table in `.agents/memory.db` with strict state transitions (`pending`, `in_progress`, `completed`, `blocked`), priority weighting, and FTS indexing. Eliminates vague prose goals and keeps multi-step agent refactorings strictly on track.
   2. **Active Task Context Injection**: `mem-get-context` automatically surfaces open tasks prioritized by urgency, ensuring the model always knows the immediate next objective upon resumption.
   3. **Autonomous Session Compaction (`mem-compact`)**: Consolidates conversation history, decisions, and facts into a single structured milestone snapshot while archiving completed tasks and vacuuming the database to prevent context rot.
   4. **Subdirectory Scoping (`--cwd`)**: Path-aware skill discovery that inspects the working directory and project markers to boost domain-specific skills (e.g., Flutter UI vs. BigQuery pipelines) automatically.
-* **Impact**: Merged the best workflow patterns of Claude Code with SkillsDB's high-speed SQLite engine, verified by 30 passing unit tests.
+* **Impact**: Merged the best workflow patterns of Claude Code with SkillsDB's high-speed SQLite engine, verified by 31 passing unit tests.
+
+#### SkillsDB v3.2: The OpenAI Primitives Fusion (Guardrails, Agent Handoffs & Memory Tombstoning)
+* **Core Innovation**:
+  1. **Deterministic Guardrails & Auto-Fix Engine (`skillsdb guardrail check`)**: Inspired by OpenAI Agents SDK Guardrails. Detects forbidden em-dashes, en-dashes, emojis, German compound hyphenation (Deppenbindestriche), and credential leaks (OpenAI, GitHub, AWS, private keys) with zero developer friction and automated remediation (`--fix`).
+  2. **Evaluator-Optimizer Task Verification Gates (`skillsdb guardrail verify-task`)**: Automated verification command execution (e.g. `pytest`, `flutter test`, `unittest`) and guardrail audit before transitioning a task to `completed`.
+  3. **Scoped Agent Handoff Protocol (`skillsdb handoff`)**: Inspired by OpenAI Swarm & Agents SDK Handoff Pattern. Replaces bloated transcript hauling during multi-agent delegation with structured, filtered context handoffs (`context_variables`).
+  4. **Active Fact Reconciliation & Memory Tombstoning (`skillsdb mem-reconcile`, `mem-deprecate-fact`, `mem-fact-history`)**: Inspired by ChatGPT Personalized Memory lifecycle. Automatically archives superseded facts into `fact_history` and filters tombstoned facts from prompt injection.
+* **Impact**: Fused the best safety, delegation, and reconciliation patterns from OpenAI into SkillsDB, backed by 36 passing unit tests.
 
 ---
 

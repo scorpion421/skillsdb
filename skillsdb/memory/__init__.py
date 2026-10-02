@@ -1,5 +1,5 @@
 """
-Project episodic memory and asynchronous multi-agent writer queue.
+Project episodic memory, handoffs, and asynchronous multi-agent writer queue.
 """
 
 from .project_memory import (
@@ -11,12 +11,27 @@ from .project_memory import (
     mem_save_decision,
     mem_save_snapshot,
     mem_save_fact,
+    mem_deprecate_fact,
+    mem_fact_history,
+    mem_reconcile,
+    mem_task_add,
+    mem_task_update,
+    mem_task_list,
+    mem_task_clear,
+    mem_compact,
     mem_get_context,
     mem_search,
     mem_prune,
     handle_pre_invocation_hook,
     calculate_transcript_savings,
     stats,
+)
+from .handoff import (
+    create_handoff,
+    format_handoff_block,
+    list_handoffs,
+    read_handoff,
+    update_handoff,
 )
 from .writer_queue import get_writer_queue, flush_journals
 
@@ -29,12 +44,25 @@ __all__ = [
     "mem_save_decision",
     "mem_save_snapshot",
     "mem_save_fact",
+    "mem_deprecate_fact",
+    "mem_fact_history",
+    "mem_reconcile",
+    "mem_task_add",
+    "mem_task_update",
+    "mem_task_list",
+    "mem_task_clear",
+    "mem_compact",
     "mem_get_context",
     "mem_search",
     "mem_prune",
     "handle_pre_invocation_hook",
     "calculate_transcript_savings",
     "stats",
+    "create_handoff",
+    "format_handoff_block",
+    "list_handoffs",
+    "read_handoff",
+    "update_handoff",
     "get_writer_queue",
     "flush_journals",
 ]

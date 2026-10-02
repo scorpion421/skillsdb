@@ -3,6 +3,7 @@ SkillsDB command-line interface argument parsing and dispatching.
 """
 
 import sys
+import json
 import argparse
 from pathlib import Path
 
@@ -14,6 +15,18 @@ from .core.concurrency import (
     search_multi_parallel,
     get_cluster,
     benchmark_concurrency,
+)
+from .core.guardrails import (
+    check_workspace,
+    verify_task,
+    fix_file,
+)
+from .memory.handoff import (
+    create_handoff,
+    format_handoff_block,
+    list_handoffs,
+    read_handoff,
+    update_handoff,
 )
 from .search.synonyms import init_synonyms
 from .search.fts import (
@@ -33,6 +46,9 @@ from .memory.project_memory import (
     mem_save_decision,
     mem_save_snapshot,
     mem_save_fact,
+    mem_deprecate_fact,
+    mem_fact_history,
+    mem_reconcile,
     mem_task_add,
     mem_task_update,
     mem_task_list,
@@ -125,6 +141,52 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser.add_argument("name", help="Skill name")
     export_parser.add_argument("target", help="Target project root directory")
 
+    # Guardrail Commands
+    guard_parser = subparsers.add_parser("guardrail", help="Deterministic guardrails, safety invariants, and task verification")
+    guard_sub = guard_parser.add_subparsers(dest="guard_action")
+
+    guard_chk = guard_sub.add_parser("check", help="Check workspace or staged files against guardrails")
+    guard_chk.add_argument("--path", default=None, help="Root path to inspect (default: CWD)")
+    guard_chk.add_argument("--staged", action="store_true", help="Only check git staged files")
+    guard_chk.add_argument("--strict", action="store_true", help="Strict blocking mode (exits 1 on warnings)")
+    guard_chk.add_argument("--fix", action="store_true", help="Auto-fix formatting violations in-place")
+    guard_chk.add_argument("--json", action="store_true", help="Output results as JSON")
+
+    guard_ver = guard_sub.add_parser("verify-task", help="Verify task with guardrails and test command before completing")
+    guard_ver.add_argument("task_id", type=int, help="Task ID")
+    guard_ver.add_argument("--cmd", default=None, help="Automated test assertion command (e.g. 'pytest' or 'flutter test')")
+    guard_ver.add_argument("--strict", action="store_true", help="Strict mode: fail on any advisory warnings")
+    guard_ver.add_argument("--no-fix", action="store_true", help="Disable automatic formatting remediation")
+    guard_ver.add_argument("--project", default=None, help="Project root directory (optional)")
+
+    # Handoff Commands
+    ho_parser = subparsers.add_parser("handoff", help="Clean multi-agent delegation and context handoffs")
+    ho_sub = ho_parser.add_subparsers(dest="ho_action")
+
+    ho_create = ho_sub.add_parser("create", help="Create an agent handoff payload for a task")
+    ho_create.add_argument("--task", type=int, required=True, help="Task ID to hand off")
+    ho_create.add_argument("--role", required=True, help="Target specialist agent role (e.g. 'Test Engineer', 'Security Auditor')")
+    ho_create.add_argument("--source", default="lead", help="Source agent role (default: lead)")
+    ho_create.add_argument("--notes", default="", help="Handoff instructions or constraints")
+    ho_create.add_argument("--vars", default=None, help="JSON-encoded context variables dictionary")
+    ho_create.add_argument("--project", default=None, help="Project root directory (optional)")
+    ho_create.add_argument("--json", action="store_true", help="Output raw JSON instead of markdown block")
+
+    ho_list = ho_sub.add_parser("list", help="List recent agent handoffs")
+    ho_list.add_argument("--status", choices=["pending", "accepted", "completed", "rejected"], default=None, help="Filter by status")
+    ho_list.add_argument("--project", default=None, help="Project root directory (optional)")
+    ho_list.add_argument("--json", action="store_true", help="Output as JSON")
+
+    ho_read = ho_sub.add_parser("read", help="Read full details and prompt block for a handoff")
+    ho_read.add_argument("id", help="Handoff ID")
+    ho_read.add_argument("--project", default=None, help="Project root directory (optional)")
+    ho_read.add_argument("--json", action="store_true", help="Output as raw JSON")
+
+    ho_update = ho_sub.add_parser("update", help="Update the status of a handoff")
+    ho_update.add_argument("id", help="Handoff ID")
+    ho_update.add_argument("status", choices=["pending", "accepted", "completed", "rejected"], help="New status")
+    ho_update.add_argument("--project", default=None, help="Project root directory (optional)")
+
     # Project Memory Commands
     mem_init_parser = subparsers.add_parser("mem-init", help="Initialize project memory database (.agents/memory.db)")
     mem_init_parser.add_argument("--project", default=None, help="Project root directory (optional)")
@@ -145,7 +207,20 @@ def build_parser() -> argparse.ArgumentParser:
     mem_fact_parser = subparsers.add_parser("mem-save-fact", help="Save a key-value fact or configuration")
     mem_fact_parser.add_argument("key", help="Fact key")
     mem_fact_parser.add_argument("value", help="Fact value")
+    mem_fact_parser.add_argument("--reason", default=None, help="Reason if updating/superseding an existing fact")
     mem_fact_parser.add_argument("--project", default=None, help="Project root directory (optional)")
+
+    mem_dep_fact_parser = subparsers.add_parser("mem-deprecate-fact", help="Tombstone a fact so it no longer pollutes LLM context")
+    mem_dep_fact_parser.add_argument("key", help="Fact key to deprecate")
+    mem_dep_fact_parser.add_argument("--reason", default="deprecated", help="Reason for deprecation")
+    mem_dep_fact_parser.add_argument("--project", default=None, help="Project root directory (optional)")
+
+    mem_hist_parser = subparsers.add_parser("mem-fact-history", help="Show audit log of fact changes and reconciliation")
+    mem_hist_parser.add_argument("--key", default=None, help="Filter history by fact key")
+    mem_hist_parser.add_argument("--project", default=None, help="Project root directory (optional)")
+
+    mem_rec_parser = subparsers.add_parser("mem-reconcile", help="Report fact lifecycle and tombstone health")
+    mem_rec_parser.add_argument("--project", default=None, help="Project root directory (optional)")
 
     mem_task_add_parser = subparsers.add_parser("mem-task-add", help="Add a task to the project task board")
     mem_task_add_parser.add_argument("title", help="Task title")
@@ -229,6 +304,102 @@ def main(argv: list[str] = None):
         handle_pre_invocation_hook()
         return
 
+    # Route guardrail commands
+    if args.command == "guardrail":
+        if args.guard_action == "check":
+            root_p = Path(args.path) if args.path else None
+            res = check_workspace(root_p, staged_only=args.staged, strict=args.strict, auto_fix=args.fix)
+            if args.json:
+                print(json.dumps(res, indent=2))
+                return
+            status_tag = "[PASSED]" if res["passed"] else ("[FAILED]" if args.strict else "[ADVISORY WARNINGS]")
+            print(f"\n=== GUARDRAIL AUDIT REPORT: {status_tag} ===")
+            print(f"  Files Checked:      {res['total_files_checked']}")
+            print(f"  Violations Found:   {res['violations_count']}")
+            if res.get("total_fixes", 0) > 0:
+                print(f"  Auto-Fixes Applied: {res['total_fixes']}")
+            if res["violations"]:
+                print("\nViolations List:")
+                for v in res["violations"]:
+                    print(f"  * [{v['severity']}] {v['file']}:{v['line']} ({v['rule']}): {v['message']}")
+                    if v['snippet']:
+                        print(f"      Snippet: {v['snippet']}")
+            print("============================================\n")
+            if args.strict and not res["passed"]:
+                sys.exit(1)
+            return
+
+        elif args.guard_action == "verify-task":
+            proj_p = Path(args.project) if getattr(args, "project", None) else None
+            res = verify_task(args.task_id, test_cmd=args.cmd, project_root=proj_p, strict=args.strict, auto_fix=not args.no_fix)
+            if res["verified"]:
+                print(f"[VERIFIED] Task #{res['task_id']} marked COMPLETED.")
+                print(f"  Details: {res['details']}")
+            else:
+                print(f"[VERIFICATION FAILED] Task #{args.task_id} not completed.")
+                print(f"  Reason: {res.get('reason', 'Unknown failure')}")
+                if res.get("snippet"):
+                    print(f"  Output: {res['snippet']}")
+                sys.exit(1)
+            return
+
+    # Route handoff commands
+    if args.command == "handoff":
+        proj_p = Path(args.project) if getattr(args, "project", None) else None
+        if args.ho_action == "create":
+            context_vars = None
+            if args.vars:
+                try:
+                    context_vars = json.loads(args.vars)
+                except Exception as e:
+                    print(f"Error parsing --vars JSON: {e}")
+                    sys.exit(1)
+            try:
+                res = create_handoff(args.task, args.role, source_role=args.source, notes=args.notes, context_vars=context_vars, project_root=proj_p)
+                if args.json:
+                    print(json.dumps(res, indent=2))
+                else:
+                    print(format_handoff_block(res))
+            except ValueError as e:
+                print(f"Error: {e}")
+                sys.exit(1)
+            return
+
+        elif args.ho_action == "list":
+            rows = list_handoffs(project_root=proj_p, status=args.status)
+            if args.json:
+                print(json.dumps(rows, indent=2))
+                return
+            filter_s = f" (Status: {args.status})" if args.status else ""
+            print(f"\n=== AGENT HANDOFFS{filter_s} ({len(rows)} records) ===")
+            if not rows:
+                print("  No handoff records found.")
+            else:
+                for r in rows:
+                    print(f"  * [{r['id']}] [{r['status'].upper():9}] Task #{r['task_id']}: [{r['source_role']}] -> [{r['target_role']}] ({r['created_at'][:19]})")
+            print()
+            return
+
+        elif args.ho_action == "read":
+            res = read_handoff(args.id, project_root=proj_p)
+            if not res:
+                print(f"Error: Handoff '{args.id}' not found.")
+                sys.exit(1)
+            if args.json:
+                print(json.dumps(res, indent=2))
+            else:
+                print(format_handoff_block(res))
+            return
+
+        elif args.ho_action == "update":
+            ok = update_handoff(args.id, args.status, project_root=proj_p)
+            if ok:
+                print(f"Handoff '{args.id}' updated -> [{args.status.upper()}]")
+            else:
+                print(f"Failed to update handoff '{args.id}'.")
+                sys.exit(1)
+            return
+
     # Route project memory commands directly to project database
     if args.command and args.command.startswith("mem-"):
         proj_root = Path(args.project) if getattr(args, "project", None) else find_project_root()
@@ -244,7 +415,13 @@ def main(argv: list[str] = None):
         elif args.command == "mem-save-snapshot":
             mem_save_snapshot(pconn, args.summary, conversation_id=args.cid, next_steps=args.next_steps, files_touched=args.files)
         elif args.command == "mem-save-fact":
-            mem_save_fact(pconn, args.key, args.value)
+            mem_save_fact(pconn, args.key, args.value, reason=args.reason)
+        elif args.command == "mem-deprecate-fact":
+            mem_deprecate_fact(pconn, args.key, reason=args.reason)
+        elif args.command == "mem-fact-history":
+            mem_fact_history(pconn, key=args.key)
+        elif args.command == "mem-reconcile":
+            mem_reconcile(pconn)
         elif args.command == "mem-task-add":
             mem_task_add(pconn, args.title, description=args.desc, priority=args.priority, status=args.status)
         elif args.command == "mem-task-update":

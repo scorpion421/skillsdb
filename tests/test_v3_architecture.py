@@ -51,10 +51,12 @@ class TestWriterQueueConcurrency(unittest.TestCase):
         conn.close()
 
     def tearDown(self):
-        # Stop any active queue threads
-        wq = get_writer_queue(self.db_path)
-        wq.stop()
-        self.temp_dir.cleanup()
+        from skillsdb.memory.writer_queue import stop_all_writer_queues
+        stop_all_writer_queues()
+        try:
+            self.temp_dir.cleanup()
+        except Exception:
+            pass
 
     def test_concurrent_writer_queue_stress(self):
         """16 concurrent threads writing simultaneously to the same database via WriterQueue."""
