@@ -195,5 +195,56 @@ class TestDirectoryScoping(unittest.TestCase):
         self.assertIn("data", data_hints)
 
 
+class TestAutonomousHook(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.db_path = Path(self.temp_dir) / ".agents" / "memory.db"
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(self.db_path)
+        self.conn.row_factory = sqlite3.Row
+        init_project_db(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_hook_auto_compaction_and_task_injection(self):
+        import json
+        from skillsdb.memory.project_memory import handle_pre_invocation_hook
+
+        # Add 3 completed tasks to trigger auto-compaction
+        mem_task_add(self.conn, "Done 1", status="completed")
+        mem_task_add(self.conn, "Done 2", status="completed")
+        mem_task_add(self.conn, "Done 3", status="completed")
+        mem_task_add(self.conn, "Urgent Core Task", priority="critical", status="in_progress")
+        mem_save_decision(self.conn, "Hook Architecture", "Autonomous PreInvocation injection")
+
+        payload = json.dumps({"invocationNum": 1, "workspacePaths": [self.temp_dir]})
+        old_stdin = sys.stdin
+        old_stdout = sys.stdout
+        sys.stdin = io.StringIO(payload)
+        sys.stdout = buffer = io.StringIO()
+        try:
+            handle_pre_invocation_hook()
+        finally:
+            sys.stdin = old_stdin
+            sys.stdout = old_stdout
+
+        raw_output = buffer.getvalue().strip()
+        data = json.loads(raw_output)
+        self.assertIn("injectSteps", data)
+        msg = data["injectSteps"][0]["ephemeralMessage"]
+        self.assertIn("Active Task Board", msg)
+        self.assertIn("Urgent Core Task", msg)
+        self.assertIn("Hook Architecture", msg)
+
+        # Verify that completed tasks were autonomously pruned!
+        cur = self.conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM project_tasks WHERE status = 'completed';")
+        self.assertEqual(cur.fetchone()[0], 0)
+        cur.execute("SELECT COUNT(*) FROM project_tasks WHERE status = 'in_progress';")
+        self.assertEqual(cur.fetchone()[0], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

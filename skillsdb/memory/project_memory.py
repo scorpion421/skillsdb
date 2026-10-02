@@ -12,6 +12,7 @@ from pathlib import Path
 from ..config import TIER_ULTRA, DB_PATH, __version__
 from ..core.detector import detect_model_tier
 from .writer_queue import get_writer_queue, flush_journals
+from ..search.fts import detect_cwd_hints
 
 
 def find_project_root(start_path: Path = None) -> Path:
@@ -150,7 +151,7 @@ def mem_save_decision(conn: sqlite3.Connection, title: str, content: str, catego
     print(f"Project decision saved (ID {row_id}): '{title}'")
 
 
-def mem_save_snapshot(conn: sqlite3.Connection, summary: str, conversation_id: str = None, next_steps: str = None, files_touched: str = None, db_path: Path = None):
+def mem_save_snapshot(conn: sqlite3.Connection, summary: str, conversation_id: str = None, next_steps: str = None, files_touched: str = None, db_path: Path = None, silent: bool = False):
     """Saves a session milestone snapshot."""
     now_iso = datetime.now(timezone.utc).isoformat()
     cid = conversation_id or os.environ.get("ANTIGRAVITY_CONVERSATION_ID") or "default"
@@ -170,7 +171,8 @@ def mem_save_snapshot(conn: sqlite3.Connection, summary: str, conversation_id: s
             """, (cid, summary + " " + (next_steps or "")))
             return row_id
         row_id = wq.execute_write(_write)
-        print(f"Session snapshot saved (ID {row_id}) for conversation: {cid}")
+        if not silent:
+            print(f"Session snapshot saved (ID {row_id}) for conversation: {cid}")
         return
 
     cursor = conn.cursor()
@@ -184,7 +186,8 @@ def mem_save_snapshot(conn: sqlite3.Connection, summary: str, conversation_id: s
     VALUES ('snapshot', ?, ?);
     """, (cid, summary + " " + (next_steps or "")))
     conn.commit()
-    print(f"Session snapshot saved (ID {row_id}) for conversation: {cid}")
+    if not silent:
+        print(f"Session snapshot saved (ID {row_id}) for conversation: {cid}")
 
 
 def mem_save_fact(conn: sqlite3.Connection, key: str, value: str, db_path: Path = None):
@@ -376,7 +379,7 @@ def mem_task_clear(conn: sqlite3.Connection, only_completed: bool = True, db_pat
     print(f"Cleared {deleted} {target_str} from project task board.")
 
 
-def mem_compact(conn: sqlite3.Connection, summary: str = None, next_steps: str = None, archive_completed: bool = True, project_root: Path = None, db_path: Path = None):
+def mem_compact(conn: sqlite3.Connection, summary: str = None, next_steps: str = None, archive_completed: bool = True, project_root: Path = None, db_path: Path = None, silent: bool = False):
     """Compacts episodic project memory into a distilled snapshot and vacuums DB."""
     root = project_root or find_project_root()
     flush_journals(root, conn)
@@ -412,7 +415,7 @@ def mem_compact(conn: sqlite3.Connection, summary: str = None, next_steps: str =
             cursor.execute("DELETE FROM project_tasks WHERE status = 'completed';")
             conn.commit()
 
-    mem_save_snapshot(conn, snap_summary, conversation_id=cid, next_steps=next_steps, db_path=target_path)
+    mem_save_snapshot(conn, snap_summary, conversation_id=cid, next_steps=next_steps, db_path=target_path, silent=silent)
 
     try:
         conn.execute("PRAGMA incremental_vacuum;")
@@ -420,15 +423,16 @@ def mem_compact(conn: sqlite3.Connection, summary: str = None, next_steps: str =
     except Exception:
         pass
 
-    print("\n=== SESSION AUTO-COMPACTION COMPLETED ===")
-    print(f"  Summary:          {snap_summary}")
-    if next_steps:
-        print(f"  Next Steps:       {next_steps}")
-    print(f"  Active Tasks:     {active_count}")
-    print(f"  Completed Pruned: {completed_count if archive_completed else 0}")
-    print(f"  Active Decisions: {decisions_count}")
-    print(f"  Active Facts:     {facts_count}")
-    print("=========================================\n")
+    if not silent:
+        print("\n=== SESSION AUTO-COMPACTION COMPLETED ===")
+        print(f"  Summary:          {snap_summary}")
+        if next_steps:
+            print(f"  Next Steps:       {next_steps}")
+        print(f"  Active Tasks:     {active_count}")
+        print(f"  Completed Pruned: {completed_count if archive_completed else 0}")
+        print(f"  Active Decisions: {decisions_count}")
+        print(f"  Active Facts:     {facts_count}")
+        print("=========================================\n")
 
 
 def mem_get_context(conn: sqlite3.Connection, max_decisions: int = 5, project_root: Path = None):
@@ -550,10 +554,12 @@ def mem_prune(conn: sqlite3.Connection, max_snapshots: int = 10, max_age_days: i
 
 def handle_pre_invocation_hook():
     """
-    Handles Antigravity PreInvocation lifecycle hook.
-    Reads JSON payload from stdin. If current workspace has .agents/memory.db,
-    retrieves context and injects it as an ephemeralMessage directly into the prompt.
-    Also injects runtime model concurrency profile instructions for Ultra/Standard.
+    Handles Antigravity PreInvocation lifecycle hook with 100% autonomy:
+    1. Runtime Model Concurrency Profile (Ultra vs Standard).
+    2. Autonomous Directory Scoping: Auto-detects domain markers (Flutter, BigQuery, Docker, etc.) and injects micro-skills.
+    3. Autonomous Auto-Compaction: Prunes completed tasks and consolidates memory if threshold reached.
+    4. Deterministic Task Board: Injects active tasks with states (pending, in_progress, blocked) and priorities.
+    5. Episodic Decisions, Facts, and latest Milestone Snapshot.
     """
     try:
         payload_raw = sys.stdin.read()
@@ -568,7 +574,8 @@ def handle_pre_invocation_hook():
 
     workspace_paths = payload.get("workspacePaths", [])
     proj_path = Path(workspace_paths[0]) if workspace_paths else Path.cwd()
-    db_path = get_project_db_path(find_project_root(proj_path))
+    root_path = find_project_root(proj_path)
+    db_path = get_project_db_path(root_path)
 
     tier, tdesc = detect_model_tier()
     lines = []
@@ -577,31 +584,88 @@ def handle_pre_invocation_hook():
         lines.append("[SKILLSDB RUNTIME PROFILE: GEMINI ULTRA (16-thread high-concurrency mode)]")
         lines.append("Parallel batch fetching active: 'skillsdb get-skills <s1> <s2>' | Clusters: 'skillsdb get-cluster <domain>' | Parallel search: 'skillsdb search-multi <q1> <q2>' | Concurrent subagents: 8-16 parallel workers supported.\n")
 
+    # 1. Autonomous Directory Scoping (Zero-effort skill routing)
+    cwd_hints = detect_cwd_hints(proj_path)
+    if cwd_hints and DB_PATH.exists():
+        try:
+            gconn = sqlite3.connect(DB_PATH, timeout=5.0)
+            gconn.row_factory = sqlite3.Row
+            gcursor = gconn.cursor()
+            fts_query = " OR ".join(cwd_hints[:8])
+            gcursor.execute("""
+            SELECT s.name, s.description FROM skills_fts f
+            JOIN skills s ON f.rowid = s.id
+            WHERE skills_fts MATCH ?
+            ORDER BY rank LIMIT 3;
+            """, (fts_query,))
+            matched_skills = gcursor.fetchall()
+            gconn.close()
+            if matched_skills:
+                lines.append(f"[AUTONOMOUS DIRECTORY SCOPING: {', '.join(cwd_hints)}]")
+                lines.append("Domain micro-skills pre-routed for current workspace:")
+                for ms in matched_skills:
+                    desc = ms['description'][:95] + "..." if len(ms['description']) > 95 else ms['description']
+                    lines.append(f"  * {ms['name']}: {desc}")
+                lines.append("")
+        except Exception:
+            pass
+
     if db_path.exists():
         try:
             conn = sqlite3.connect(db_path, timeout=5.0)
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
+            # 2. Autonomous Auto-Compaction check (prunes completed tasks automatically)
+            cursor.execute("SELECT COUNT(*) FROM project_tasks WHERE status = 'completed';")
+            completed_count = cursor.fetchone()[0]
+            if completed_count >= 3:
+                mem_compact(conn, summary=f"[AUTO-COMPACTED] Pruned {completed_count} completed tasks and consolidated state.", archive_completed=True, project_root=root_path, db_path=db_path, silent=True)
+
             mem_lines = []
+
+            # 3. Active Task Board
+            cursor.execute("""
+            SELECT id, title, status, priority FROM project_tasks
+            WHERE status IN ('pending', 'in_progress', 'blocked')
+            ORDER BY 
+                CASE status WHEN 'in_progress' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END,
+                CASE priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'med' THEN 3 ELSE 4 END,
+                id ASC LIMIT 5;
+            """)
+            open_tasks = cursor.fetchall()
+            if open_tasks:
+                mem_lines.append("Active Task Board (Deterministic Progress):")
+                for t in open_tasks:
+                    mem_lines.append(f"  * [#{t['id']}] [{t['status'].upper():11}] ({t['priority'].upper():8}): {t['title']}")
+
+            # 4. Key Facts
             cursor.execute("SELECT key, value FROM project_facts ORDER BY updated_at DESC LIMIT 10;")
             facts = cursor.fetchall()
             if facts:
+                if mem_lines:
+                    mem_lines.append("")
                 mem_lines.append("Project Facts & Configs:")
                 for f in facts:
                     mem_lines.append(f"  * {f['key']}: {f['value']}")
 
+            # 5. Active Decisions
             cursor.execute("SELECT title, content FROM project_decisions WHERE is_active = 1 ORDER BY updated_at DESC LIMIT 5;")
             decs = cursor.fetchall()
             if decs:
-                mem_lines.append("\nActive Architectural Decisions:")
+                if mem_lines:
+                    mem_lines.append("")
+                mem_lines.append("Active Architectural Decisions:")
                 for d in decs:
                     mem_lines.append(f"  * [{d['title']}]: {d['content']}")
 
+            # 6. Milestone Snapshot
             cursor.execute("SELECT summary, next_steps, created_at FROM session_snapshots ORDER BY id DESC LIMIT 1;")
             snap = cursor.fetchone()
             if snap:
-                mem_lines.append("\nLatest Project Milestone Snapshot:")
+                if mem_lines:
+                    mem_lines.append("")
+                mem_lines.append("Latest Project Milestone Snapshot:")
                 mem_lines.append(f"  Summary: {snap['summary']}")
                 if snap['next_steps']:
                     mem_lines.append(f"  Next Steps: {snap['next_steps']}")
