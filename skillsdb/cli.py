@@ -21,6 +21,11 @@ from .core.guardrails import (
     verify_task,
     fix_file,
 )
+from .core.fim import (
+    slice_fim,
+    slice_fim_symbol,
+    format_fim_block,
+)
 from .memory.handoff import (
     create_handoff,
     format_handoff_block,
@@ -28,6 +33,14 @@ from .memory.handoff import (
     read_handoff,
     update_handoff,
 )
+from .memory.agent_templates import (
+    init_agent_templates,
+    list_agent_templates,
+    get_agent_template,
+    register_agent_template,
+    format_agent_prompt,
+)
+from .platform.mcp_server import run_mcp_server
 from .search.synonyms import init_synonyms
 from .search.fts import (
     suggest_skills,
@@ -112,6 +125,38 @@ def build_parser() -> argparse.ArgumentParser:
     update_parser.add_argument("--check", action="store_true", help="Only check for updates (alias for check-update)")
 
     subparsers.add_parser("mem-pre-invocation-hook", help="Internal Antigravity lifecycle hook handler")
+
+    # Native MCP Server Command (Mistral / Multi-Client Connector)
+    subparsers.add_parser("mcp-serve", help="Run SkillsDB as a native Model Context Protocol (MCP) server over stdio")
+
+    # FIM (Fill-in-the-Middle) Command (Codestral Surgical Slicing)
+    fim_parser = subparsers.add_parser("fim", help="Fill-in-the-Middle surgical code chunking (Codestral pattern)")
+    fim_sub = fim_parser.add_subparsers(dest="fim_action")
+    fim_slice = fim_sub.add_parser("slice", help="Slice code file into minimal prefix/suffix window around target")
+    fim_slice.add_argument("file_path", help="Path to target code file")
+    fim_slice.add_argument("--line", type=int, default=None, help="Target line number (1-indexed)")
+    fim_slice.add_argument("--symbol", default=None, help="Target symbol name (function, class, variable)")
+    fim_slice.add_argument("--prefix", type=int, default=25, help="Prefix line window size (default: 25)")
+    fim_slice.add_argument("--suffix", type=int, default=25, help="Suffix line window size (default: 25)")
+    fim_slice.add_argument("--json", action="store_true", help="Output raw JSON instead of Codestral FIM block")
+
+    # Agent Templates Command (Mistral Agents API pattern)
+    agent_parser = subparsers.add_parser("agent", help="Reusable agent template catalog (Mistral Agents API pattern)")
+    agent_sub = agent_parser.add_subparsers(dest="agent_action")
+    agent_list = agent_sub.add_parser("list", help="List all registered agent templates")
+    agent_list.add_argument("--json", action="store_true", help="Output as JSON")
+
+    agent_get = agent_sub.add_parser("get", help="Get agent template details and prompt block")
+    agent_get.add_argument("id", help="Agent template ID")
+    agent_get.add_argument("--json", action="store_true", help="Output as JSON")
+
+    agent_reg = agent_sub.add_parser("register", help="Register or update an agent template")
+    agent_reg.add_argument("id", help="Unique agent ID")
+    agent_reg.add_argument("--name", required=True, help="Agent display name")
+    agent_reg.add_argument("--role", required=True, help="Agent role description")
+    agent_reg.add_argument("--prompt", required=True, help="Agent system prompt instructions")
+    agent_reg.add_argument("--skills", default="", help="Comma-separated skill names")
+    agent_reg.add_argument("--tools", default="", help="Comma-separated tool names")
 
     search_parser = subparsers.add_parser("search", help="Full-text search in rules and skills")
     search_parser.add_argument("query", help="Search query")
@@ -265,9 +310,9 @@ def build_parser() -> argparse.ArgumentParser:
     mem_prune_parser.add_argument("--project", default=None, help="Project root directory (optional)")
 
     # Model Profile Commands
-    profile_parser = subparsers.add_parser("profile", help="View or configure model tier concurrency profile (ultra, standard, lean, auto)")
+    profile_parser = subparsers.add_parser("profile", help="View or configure model tier concurrency profile (ultra, standard, lean, local, offline, auto)")
     profile_parser.add_argument("action", nargs="?", default="get", choices=["get", "set", "auto"], help="Profile action (default: get)")
-    profile_parser.add_argument("tier", nargs="?", default=None, help="Model tier when action is 'set' (ultra, standard, lean)")
+    profile_parser.add_argument("tier", nargs="?", default=None, help="Model tier when action is 'set' (ultra, standard, lean, local, offline)")
 
     # Parallel Concurrency Commands
     get_skills_parser = subparsers.add_parser("get-skills", help="Retrieve multiple skills concurrently in a single batch call")
@@ -303,6 +348,73 @@ def main(argv: list[str] = None):
     if args.command == "mem-pre-invocation-hook":
         handle_pre_invocation_hook()
         return
+
+    # Route native MCP Server
+    if args.command == "mcp-serve":
+        run_mcp_server()
+        return
+
+    # Route FIM (Fill-in-the-Middle) Command
+    if args.command == "fim":
+        if args.fim_action == "slice":
+            fpath = Path(args.file_path)
+            try:
+                if args.symbol:
+                    res = slice_fim_symbol(fpath, args.symbol, prefix_lines=args.prefix, suffix_lines=args.suffix)
+                elif args.line:
+                    res = slice_fim(fpath, args.line, prefix_lines=args.prefix, suffix_lines=args.suffix)
+                else:
+                    print("Error: Specify either --line <number> or --symbol <name>.")
+                    sys.exit(1)
+
+                if args.json:
+                    print(json.dumps(res, indent=2))
+                else:
+                    print(format_fim_block(res))
+            except Exception as e:
+                print(f"Error: {e}")
+                sys.exit(1)
+            return
+
+    # Route Agent Templates Command
+    if args.command == "agent":
+        conn = get_connection(DB_PATH)
+        init_db(conn)
+        init_agent_templates(conn)
+        try:
+            if args.agent_action == "list" or not args.agent_action:
+                tmpls = list_agent_templates(conn)
+                if getattr(args, "json", False):
+                    print(json.dumps(tmpls, indent=2))
+                else:
+                    print(f"\n=== REGISTERED AGENT TEMPLATES ({len(tmpls)} templates) ===")
+                    for t in tmpls:
+                        s_str = ", ".join(t['skills']) if t['skills'] else "None"
+                        print(f"  * [{t['id']}] {t['name']}")
+                        print(f"      Role:   {t['role']}")
+                        print(f"      Skills: {s_str}")
+                    print()
+                return
+
+            elif args.agent_action == "get":
+                tmpl = get_agent_template(conn, args.id)
+                if not tmpl:
+                    print(f"Error: Agent template '{args.id}' not found.")
+                    sys.exit(1)
+                if args.json:
+                    print(json.dumps(tmpl, indent=2))
+                else:
+                    print(format_agent_prompt(tmpl))
+                return
+
+            elif args.agent_action == "register":
+                skills = [s.strip() for s in args.skills.split(",") if s.strip()] if args.skills else []
+                tools = [t.strip() for t in args.tools.split(",") if t.strip()] if args.tools else []
+                res = register_agent_template(conn, args.id, args.name, args.role, args.prompt, skills=skills, tools=tools)
+                print(f"Agent template '{args.id}' ({args.name}) registered successfully.")
+                return
+        finally:
+            conn.close()
 
     # Route guardrail commands
     if args.command == "guardrail":
@@ -487,7 +599,7 @@ def main(argv: list[str] = None):
     elif args.command == "profile":
         if args.action == "set":
             if not args.tier:
-                print("Error: Specify tier to set (ultra, standard, lean). Example: skillsdb profile set ultra")
+                print("Error: Specify tier to set (ultra, standard, lean, local, offline). Example: skillsdb profile set local")
             else:
                 set_profile(args.tier, db_path=DB_PATH)
         elif args.action == "auto":

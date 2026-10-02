@@ -1,5 +1,5 @@
 """
-Project episodic memory, handoffs, and asynchronous multi-agent writer queue.
+Project episodic memory, handoffs, agent templates, and asynchronous multi-agent writer queue.
 """
 
 from .project_memory import (
@@ -33,6 +33,13 @@ from .handoff import (
     read_handoff,
     update_handoff,
 )
+from .agent_templates import (
+    init_agent_templates,
+    list_agent_templates,
+    get_agent_template,
+    register_agent_template,
+    format_agent_prompt,
+)
 from .writer_queue import get_writer_queue, flush_journals
 
 __all__ = [
@@ -63,6 +70,11 @@ __all__ = [
     "list_handoffs",
     "read_handoff",
     "update_handoff",
+    "init_agent_templates",
+    "list_agent_templates",
+    "get_agent_template",
+    "register_agent_template",
+    "format_agent_prompt",
     "get_writer_queue",
     "flush_journals",
 ]

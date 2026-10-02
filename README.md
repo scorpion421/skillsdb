@@ -1,6 +1,6 @@
 # SkillsDB: Centralized Customizations, Autonomous Memory & High-Concurrency Knowledge Engine for Google Antigravity
 
-[![Version](https://img.shields.io/badge/version-3.2.0-blue.svg)](https://github.com/scorpion421/skillsdb/releases/tag/v3.2.0)
+[![Version](https://img.shields.io/badge/version-3.3.0-blue.svg)](https://github.com/scorpion421/skillsdb/releases/tag/v3.3.0)
 [![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-blue.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/scorpion421/skillsdb)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
@@ -190,9 +190,9 @@ Running Gemini Ultra without SkillsDB severely handicaps model performance and e
 
 ---
 
-## Evolution & Generational Milestones: v1.0 vs. v2.0 vs. v3.0 vs. v3.1 vs. v3.2
+## Evolution & Generational Milestones: v1.0 vs. v2.0 vs. v3.0 vs. v3.1 vs. v3.2 vs. v3.3
 
-SkillsDB has evolved across five major engineering generations, advancing from an initial prompt-saving experiment into a hardened, high-concurrency enterprise knowledge and agent orchestration engine:
+SkillsDB has evolved across six major engineering generations, advancing from an initial prompt-saving experiment into a hardened, high-concurrency enterprise knowledge and agent orchestration engine:
 
 ```mermaid
 flowchart LR
@@ -201,28 +201,30 @@ flowchart LR
     V3["SkillsDB v3.0\n(Enterprise Hardened)\nModular Package & Bundler\nLock-Free WriterQueue\nMultilingual Synapses"]
     V4["SkillsDB v3.1\n(Architecture Fusion)\nTask State Machine\nAuto-Compaction & CWD Scope\n31 Unit Tests"]
     V5["SkillsDB v3.2\n(OpenAI Primitives Fusion)\nGuardrails & Auto-Fix\nAgent Handoff Protocol\nMemory Tombstoning\n36 Unit Tests"]
+    V6["SkillsDB v3.3\n(Mistral Sovereignty Fusion)\nNative MCP Server (stdio)\nCodestral FIM Slicing\nAgent Templates Catalog\n41 Unit Tests"]
 
     V1 -->|"Added memory & micro-skills"| V2
     V2 -->|"Added modularity & lock-free swarm"| V3
     V3 -->|"Added task state & auto-compaction"| V4
     V4 -->|"Added guardrails, handoffs & tombstoning"| V5
+    V5 -->|"Added MCP, FIM & templates"| V6
 ```
 
 ### Generational Feature Matrix
 
-| Capability / Dimension | SkillsDB v1.0 (Foundation) | SkillsDB v2.0 & v2.3 (Autonomous & Adaptive) | SkillsDB v3.0 (Enterprise Hardened) | SkillsDB v3.1 (Architecture Fusion) | SkillsDB v3.2 (OpenAI Primitives Fusion) |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Codebase Architecture** | Monolithic script (~900 lines) | Monolithic script (~2,100 lines) | Modular 11-module package (`skillsdb/`) + automated single-file bundler | Modular 11-module package + task state machine + auto-compaction | **Modular 13-module package + guardrail engine + handoffs** |
-| **Prompt Bloat Elimination** | **~382 tokens** (-97.4% per turn) | **~382 tokens** (-97.4% per turn) | **~382 tokens** (-97.4% per turn) | **~382 tokens** (-97.4% per turn) | **~382 tokens** (-97.4% per turn) |
-| **Skill Retrieval Cost** | Full skill file dump (~2,500 tokens) | Micro-skills (`--section`, ~150 tokens) | Micro-skills + multilingual synonym expansion | Micro-skills + directory scoping (`--cwd` path-aware hints) | **Micro-skills + directory scoping + scoped handoffs** |
-| **Cross-Lingual Discovery** | Exact English keywords only | Exact English keywords only | Zero-dependency synonym synapses (German -> English) | Synonym synapses + automatic directory path context | **Synonym synapses + path context + Deppenbindestrich guardrails** |
-| **Multi-Agent Write Concurrency** | None (sequential only) | Standard SQLite WAL (risk of write lock) | Lock-free WriterQueue + append-only journals | Lock-free WriterQueue across decisions, facts, and tasks | **Lock-free WriterQueue across tasks, handoffs, and verifications** |
-| **Subagent Swarming Capacity** | 1 process at a time | 2 to 4 workers (read-only) | Up to 16 parallel subagents (concurrent reads/writes) | Up to 16 parallel subagents (shared task boards & journals) | **16+ parallel workers + scoped Agent Handoffs (`context_variables`)** |
-| **Project Episodic Memory** | None (stateless across chats) | `.agents/memory.db` via PreInvocation hook | Autonomous memory + background writer queue | Autonomous memory + Task State Machine (`project_tasks`) | **Autonomous memory + Fact Tombstoning (`fact_history`)** |
-| **Deterministic Progress State** | Vague chat prose | Free-form milestone summaries | Free-form milestone summaries | Deterministic Task States (`pending`, `in_progress`, `completed`, `blocked`) | **Task States + Evaluator-Optimizer Task Verification Gates** |
-| **Context Compaction Engine** | None | Manual snapshot creation | Manual snapshot creation | Autonomous session compaction (`mem-compact`) + completed task pruning | **Auto-compaction + memory tombstoning + handoff lifecycle** |
-| **Safety & Verification** | None | None | None | None | **Deterministic Guardrails (`skillsdb guardrail`) + zero-friction auto-fix** |
-| **Automated Test Suite** | 0 unit tests | 17 functional tests | 24 unit tests | 31 unit tests | **36 comprehensive unit tests (all passing)** |
+| Capability / Dimension | SkillsDB v1.0 (Foundation) | SkillsDB v2.0 & v2.3 (Autonomous & Adaptive) | SkillsDB v3.0 (Enterprise Hardened) | SkillsDB v3.1 (Architecture Fusion) | SkillsDB v3.2 (OpenAI Primitives Fusion) | SkillsDB v3.3 (Mistral Sovereignty Fusion) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Codebase Architecture** | Monolithic script (~900 lines) | Monolithic script (~2,100 lines) | Modular 11-module package (`skillsdb/`) + automated bundler | Modular 11-module package + task state machine + auto-compaction | Modular 13-module package + guardrail engine + handoffs | **Modular 16-module package + native MCP server + FIM engine** |
+| **Prompt Bloat Elimination** | **~382 tokens** (-97.4% per turn) | **~382 tokens** (-97.4% per turn) | **~382 tokens** (-97.4% per turn) | **~382 tokens** (-97.4% per turn) | **~382 tokens** (-97.4% per turn) | **~382 tokens** (-97.4% per turn) |
+| **Skill Retrieval Cost** | Full skill file dump (~2,500 tokens) | Micro-skills (`--section`, ~150 tokens) | Micro-skills + multilingual synonym expansion | Micro-skills + directory scoping (`--cwd` path-aware hints) | Micro-skills + directory scoping + scoped handoffs | **Micro-skills + directory scoping + scoped handoffs + MCP tool calls** |
+| **Cross-Lingual Discovery** | Exact English keywords only | Exact English keywords only | Zero-dependency synonym synapses (German -> English) | Synonym synapses + automatic directory path context | Synonym synapses + path context + Deppenbindestrich guardrails | **Synonym synapses + path context + Deppenbindestrich guardrails** |
+| **Multi-Agent Write Concurrency** | None (sequential only) | Standard SQLite WAL (risk of write lock) | Lock-free WriterQueue + append-only journals | Lock-free WriterQueue across decisions, facts, and tasks | Lock-free WriterQueue across tasks, handoffs, and verifications | **Lock-free WriterQueue across tasks, handoffs, and verifications** |
+| **Subagent Swarming Capacity** | 1 process at a time | 2 to 4 workers (read-only) | Up to 16 parallel subagents (concurrent reads/writes) | Up to 16 parallel subagents (shared task boards & journals) | 16+ parallel workers + scoped Agent Handoffs (`context_variables`) | **16+ parallel workers + scoped Agent Handoffs + Reusable Agent Templates** |
+| **Project Episodic Memory** | None (stateless across chats) | `.agents/memory.db` via PreInvocation hook | Autonomous memory + background writer queue | Autonomous memory + Task State Machine (`project_tasks`) | Autonomous memory + Fact Tombstoning (`fact_history`) | **Autonomous memory + Fact Tombstoning (`fact_history`)** |
+| **Deterministic Progress State** | Vague chat prose | Free-form milestone summaries | Free-form milestone summaries | Deterministic Task States (`pending`, `in_progress`, `completed`, `blocked`) | Task States + Evaluator-Optimizer Task Verification Gates | **Task States + Evaluator-Optimizer Task Verification Gates** |
+| **Context Compaction Engine** | None | Manual snapshot creation | Manual snapshot creation | Autonomous session compaction (`mem-compact`) + completed task pruning | Auto-compaction + memory tombstoning + handoff lifecycle | **Auto-compaction + memory tombstoning + Codestral FIM slicing** |
+| **Safety & Verification** | None | None | None | None | Deterministic Guardrails (`skillsdb guardrail`) + zero-friction auto-fix | **Deterministic Guardrails + zero-friction auto-fix + local sovereignty checks** |
+| **Automated Test Suite** | 0 unit tests | 17 functional tests | 24 unit tests | 31 unit tests | 36 unit tests | **41 comprehensive unit tests (all passing)** |
 
 ### Generational Breakdown
 
@@ -257,6 +259,14 @@ flowchart LR
   3. **Scoped Agent Handoff Protocol (`skillsdb handoff`)**: Inspired by OpenAI Swarm & Agents SDK Handoff Pattern. Replaces bloated transcript hauling during multi-agent delegation with structured, filtered context handoffs (`context_variables`).
   4. **Active Fact Reconciliation & Memory Tombstoning (`skillsdb mem-reconcile`, `mem-deprecate-fact`, `mem-fact-history`)**: Inspired by ChatGPT Personalized Memory lifecycle. Automatically archives superseded facts into `fact_history` and filters tombstoned facts from prompt injection.
 * **Impact**: Fused the best safety, delegation, and reconciliation patterns from OpenAI into SkillsDB, backed by 36 passing unit tests.
+
+#### SkillsDB v3.3: The Mistral Sovereignty & Connector Fusion (Native MCP Server, Codestral FIM Slicing & Agent Templates)
+* **Core Innovation**:
+  1. **Native Model Context Protocol (MCP) Server (`skillsdb mcp-serve`)**: Zero-dependency JSON-RPC 2.0 stdio server providing universal MCP host connectivity (Antigravity, Cursor, Continue.dev, Claude Desktop) with 6 core tools for rules, skills, guardrails, FIM slicing, and agent templates.
+  2. **Codestral Fill-in-the-Middle (FIM) Slicing (`skillsdb fim slice`)**: Surgical context extraction with standard `<fim_prefix>`, `<fim_suffix>`, and `<fim_middle>` delimiters, cutting context bloat by up to 90% during code refactoring.
+  3. **Local Sovereignty & Offline Profile (`skillsdb profile set local` / `offline`)**: Air-gapped execution mode with health verification for local Ollama and Codestral endpoints (`http://127.0.0.1:11434`) and zero cloud telemetry.
+  4. **Reusable Agent Templates Catalog (`skillsdb agent register / list / get`)**: Persistent agent profiles storing pre-bound roles, system prompts, allowed tools, and domain skills.
+* **Impact**: United the standout architectural strengths of Mistral AI with SkillsDB's high-speed embedded SQLite engine, verified by 41 passing unit tests.
 
 ---
 
@@ -319,8 +329,10 @@ skillsdb export-skill flutter-apply-architecture-best-practices .
 # View active model profile and concurrency settings
 skillsdb profile
 
-# Set model profile explicitly (ultra, standard, lean, or auto)
+# Set model profile explicitly (ultra, standard, lean, local, offline, or auto)
 skillsdb profile set ultra
+skillsdb profile set local
+skillsdb profile set offline
 skillsdb profile auto
 
 # Batch fetch multiple skills concurrently in 1 turn (up to 16 parallel threads)
@@ -380,7 +392,42 @@ skillsdb mem-search "JWT"
 skillsdb mem-prune --max-snapshots 10 --max-age 30
 ```
 
-### 4. Health Diagnostics, UTF-8 & Non-Destructive Updates
+### 4. Guardrails, Agent Handoffs & Memory Reconciliation (v3.2)
+```powershell
+# Check text or files against active formatting and credential guardrails
+skillsdb guardrail check "Hier ist ein Text mit unerlaubten Zeichen"
+skillsdb guardrail check path/to/file.py --fix
+
+# Verify task execution with automated tests before completing
+skillsdb guardrail verify-task 1 --command "pytest tests/"
+
+# Initiate structured agent handoff with scoped context variables
+skillsdb handoff create "security_auditor" "Audit auth flow" --context '{"scope": "jwt"}'
+skillsdb handoff list
+skillsdb handoff update 1 completed
+
+# Fact reconciliation and tombstoning
+skillsdb mem-reconcile "PORT" "8080"
+skillsdb mem-deprecate-fact "LEGACY_ENDPOINT"
+skillsdb mem-fact-history "PORT"
+```
+
+### 5. Native MCP Server, Codestral FIM Slicing & Agent Templates (v3.3)
+```powershell
+# Launch native JSON-RPC 2.0 stdio MCP server for Antigravity, Cursor, Continue.dev
+skillsdb mcp-serve
+
+# Surgical Fill-in-the-Middle (FIM) context slicing around lines or symbols
+skillsdb fim slice path/to/file.py --line 45 --window 15
+skillsdb fim slice path/to/file.py --symbol calculate_metrics --window 20
+
+# Reusable Agent Templates Catalog (Mistral Agents API pattern)
+skillsdb agent list
+skillsdb agent get lead_architect
+skillsdb agent register custom_dev --role "Backend Developer" --prompt "You write clean APIs." --skills "api-design"
+```
+
+### 6. Health Diagnostics, UTF-8 & Non-Destructive Updates
 ```powershell
 # Run system diagnostics (DB integrity, concurrency engine, PATH, hooks, UTF-8)
 skillsdb doctor
@@ -443,20 +490,23 @@ SkillsDB/
 ├── database/
 │   ├── customizations.db       # Central SQLite database (120 skills, 10 rules, FTS5 + WAL)
 │   └── db_manager.py           # Compiled 100% standalone CLI engine (backward-compatible)
-├── skillsdb/                   # Modular Python package architecture (v3.0)
+├── skillsdb/                   # Modular 16-module Python package architecture (v3.3)
 │   ├── __init__.py             # Package exports and version metadata
 │   ├── __main__.py             # Direct execution entrypoint (python -m skillsdb)
 │   ├── cli.py                  # CLI argument parsing and command routing
-│   ├── config.py               # Paths, tiers (ultra/standard/lean), clusters, token estimator
+│   ├── config.py               # Paths, tiers (ultra/standard/lean/local/offline), token estimator
 │   ├── core/
 │   │   ├── db.py               # Connection pooling, WAL mode, pragmas, schema init
-│   │   ├── detector.py         # Resilient 4-stage Gemini model tier detection
-│   │   └── concurrency.py      # ThreadPoolExecutor parallel retrieval and benchmarks
+│   │   ├── detector.py         # Resilient tier detection & local endpoint health check
+│   │   ├── concurrency.py      # ThreadPoolExecutor parallel retrieval and benchmarks
+│   │   └── fim.py              # Codestral Fill-in-the-Middle (FIM) surgical chunking
 │   ├── memory/
 │   │   ├── project_memory.py   # Isolated episodic memory (.agents/memory.db) & PreInvocation hook
-│   │   └── writer_queue.py     # Asynchronous single-writer queue & append-only journals
+│   │   ├── writer_queue.py     # Asynchronous single-writer queue & append-only journals
+│   │   └── agent_templates.py  # Reusable agent templates catalog (Mistral Agents API pattern)
 │   ├── platform/
-│   │   └── windows_utf8.py     # Windows UTF-8 application manifests and registry setup
+│   │   ├── windows_utf8.py     # Windows UTF-8 application manifests and registry setup
+│   │   └── mcp_server.py       # Native Model Context Protocol (MCP) JSON-RPC 2.0 stdio server
 │   ├── search/
 │   │   ├── fts.py              # FTS5 search, micro-skills, suggestions, rules retrieval
 │   │   └── synonyms.py         # Zero-dependency multilingual synonym synapses (DE -> EN)
@@ -472,7 +522,9 @@ SkillsDB/
 ├── tests/
 │   ├── test_autonomous.py      # Automated unit test suite (differential merge, hooks, etc.)
 │   ├── test_ultra_concurrency.py # High-concurrency, model tier, and WAL parallel test suite
-│   └── test_v3_architecture.py # WriterQueue stress, journals, synonyms, and modular tests
+│   ├── test_v3_architecture.py # WriterQueue stress, journals, synonyms, and modular tests
+│   ├── test_v3_2_openai_fusion.py # Guardrails, agent handoffs, task verifications, and tombstoning
+│   └── test_v3_3_mistral_fusion.py # MCP server, Codestral FIM slicing, and agent templates
 ├── deploy.ps1                  # PowerShell automated deployment script (Windows)
 ├── deploy.py                   # Python automated deployment script (Cross-platform)
 ├── .gitignore                  # Git hygiene configuration

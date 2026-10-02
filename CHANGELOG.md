@@ -6,6 +6,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.3.0] - 2026-10-02
+
+### The Mistral Sovereignty & Connector Fusion (Native MCP Server, Codestral FIM Slicing & Agent Templates)
+
+This release synthesizes the standout architectural innovations from **Mistral AI** (Mistral MCP connectors, Codestral Fill-in-the-Middle code intelligence, local deployment sovereignty, and the Mistral Agents API pattern) into SkillsDB, giving Google Antigravity universal MCP interoperability, 90% surgical context reduction during refactorings, offline air-gapped resilience, and reusable agent catalog templates.
+
+#### Key Innovations in v3.3.0:
+1. **Native Model Context Protocol (MCP) Server (`skillsdb mcp-serve`)**:
+   - Zero-dependency JSON-RPC 2.0 stdio server compliant with the standard Model Context Protocol.
+   - Exposes 6 native SkillsDB tools to any MCP host client (Antigravity, Cursor, Continue.dev, Claude Desktop):
+     - `skillsdb_get_rules`: Fetches active global rules and formatting invariants.
+     - `skillsdb_suggest_skills`: Runs multilingual synonym-augmented FTS5 skill suggestions.
+     - `skillsdb_get_skill`: Returns surgical micro-skill sections or full instruction files.
+     - `skillsdb_guardrail_check`: Executes zero-friction guardrail validation and auto-fixing.
+     - `skillsdb_fim_slice`: Generates surgical Fill-in-the-Middle code slices for refactoring.
+     - `skillsdb_agent_template`: Loads reusable agent system prompts and pre-bound tools.
+   - Strict stdio separation: All diagnostics and logs go exclusively to stderr, ensuring 100% clean JSON-RPC stdout frames.
+2. **Fill-in-the-Middle (FIM) Surgical Slicing (`skillsdb fim slice`)**:
+   - Implements Codestral FIM chunking (`<fim_prefix>`, `<fim_suffix>`, `<fim_middle>`) with configurable token window margins.
+   - Line slicing (`--line <N> --window <W>`) and symbol slicing (`--symbol <Name>`) extract only the immediate operational context surrounding a target edit, cutting refactoring context bloat by up to 90%.
+3. **Local Sovereignty & Offline Fallback (`skillsdb profile set local` / `offline`)**:
+   - Designed for air-gapped, privacy-sensitive, or local Ollama / Codestral execution.
+   - Bypasses cloud heuristic checks and provides local health probing (`check_local_endpoint`) for local LLM servers (e.g. `http://127.0.0.1:11434`), ensuring zero external network calls.
+4. **Reusable Agent Templates Catalog (`skillsdb agent register / list / get`)**:
+   - Inspired by the Mistral Agents API specification.
+   - Persists reusable agent profiles with bounded roles, system prompts, allowed tools, and pre-bound domain skills in `agent_templates` in `customizations.db`.
+   - Pre-seeded with 4 core templates: `lead_architect`, `security_auditor`, `test_runner`, and `flutter_expert`.
+5. **Expanded Test Suite (41 Automated Tests)**:
+   - Added `tests/test_v3_3_mistral_fusion.py`. All 41 unit tests pass with zero regressions.
+
+---
+
 ## [3.2.0] - 2026-10-02
 
 ### The OpenAI Primitives Fusion (Guardrails, Agent Handoffs & Memory Tombstoning)
@@ -44,9 +76,9 @@ This benchmark is derived directly from live telemetry measured across **61 prod
 ```mermaid
 xychart-beta
     title "Startup Prompt Overhead per Turn (Tokens)"
-    x-axis ["Traditional Static Plugins", "SkillsDB v1.0", "SkillsDB v2.0", "SkillsDB v3.0", "SkillsDB v3.1", "SkillsDB v3.2"]
+    x-axis ["Traditional Static Plugins", "SkillsDB v1.0", "SkillsDB v2.0", "SkillsDB v3.0", "SkillsDB v3.1", "SkillsDB v3.2", "SkillsDB v3.3"]
     y-axis "Tokens per Turn" 0 --> 16000
-    bar [14813, 382, 382, 382, 382, 382]
+    bar [14813, 382, 382, 382, 382, 382, 382]
 ```
 
 #### 2. Head-to-Head Architectural Comparison

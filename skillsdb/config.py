@@ -13,12 +13,14 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-__version__ = "3.2.0"
+__version__ = "3.3.0"
 
 # Model capability tiers
 TIER_LEAN = "lean"          # Gemini Flash, Flash-Lite, micro-skills, minimal token footprint
 TIER_STANDARD = "standard"  # Gemini Pro, standard sequential execution
 TIER_ULTRA = "ultra"        # Gemini Ultra, high-concurrency batching & subagent swarming
+TIER_LOCAL = "local"        # Local / sovereign model (Ollama, Codestral, vLLM) with zero cloud egress
+TIER_OFFLINE = "offline"    # Air-gapped offline operation
 
 # Pre-indexed skill clusters for instant parallel prefetching
 SKILL_CLUSTERS = {

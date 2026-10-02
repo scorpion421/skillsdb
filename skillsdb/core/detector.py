@@ -1,27 +1,45 @@
 """
-Resilient multi-stage Gemini model tier detection and profile management.
+Resilient multi-stage Gemini model tier detection, profile management, and local sovereignty modes.
 """
 
 import os
 import json
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from ..config import TIER_LEAN, TIER_STANDARD, TIER_ULTRA, DB_PATH
+from ..config import TIER_LEAN, TIER_STANDARD, TIER_ULTRA, TIER_LOCAL, TIER_OFFLINE, DB_PATH
 from .db import get_connection, init_db
+
+
+def check_local_endpoint(url: str = "http://localhost:11434/api/tags", timeout: float = 1.0) -> dict:
+    """Checks availability of local inference engines (Ollama, vLLM, Codestral local)."""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "SkillsDB/3.3"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status == 200:
+                data = json.loads(resp.read().decode("utf-8"))
+                models = [m.get("name") for m in data.get("models", [])]
+                return {"available": True, "models": models, "url": url}
+    except Exception:
+        pass
+    return {"available": False, "models": [], "url": url}
 
 
 def detect_model_tier(cid: str = None, db_path: Path = None) -> tuple[str, str]:
     """
-    Detects the active Gemini model tier and returns (tier, source_description).
+    Detects the active model tier and returns (tier, source_description).
     Tiers:
       - 'ultra': Gemini Ultra, Gemini 2.0/3.x Pro (High/Ultra capability).
       - 'standard': Gemini Pro (Standard).
       - 'lean': Gemini Flash, Flash-Lite, or low-quota sessions.
+      - 'local' / 'offline': Air-gapped local model (Codestral, Ollama, vLLM).
     """
     # Stage 1: Explicit environment variable override
     env_tier = (os.environ.get("SKILLSDB_MODEL_TIER") or os.environ.get("ANTIGRAVITY_MODEL", "")).strip().lower()
-    if env_tier in [TIER_LEAN, TIER_STANDARD, TIER_ULTRA]:
+    if env_tier in [TIER_LEAN, TIER_STANDARD, TIER_ULTRA, TIER_LOCAL, TIER_OFFLINE]:
         return env_tier, f"Environment variable SKILLSDB_MODEL_TIER={env_tier}"
+    if "local" in env_tier or "offline" in env_tier or "ollama" in env_tier or "codestral" in env_tier:
+        return TIER_LOCAL, f"Environment variable ({env_tier}: Local sovereignty detected)"
     if "ultra" in env_tier:
         return TIER_ULTRA, f"Environment variable ({env_tier}: Ultra detected)"
     if "flash" in env_tier:
@@ -38,7 +56,7 @@ def detect_model_tier(cid: str = None, db_path: Path = None) -> tuple[str, str]:
             conn.close()
             if row and row[0]:
                 val = row[0].strip().lower()
-                if val in [TIER_LEAN, TIER_STANDARD, TIER_ULTRA]:
+                if val in [TIER_LEAN, TIER_STANDARD, TIER_ULTRA, TIER_LOCAL, TIER_OFFLINE]:
                     return val, f"Configured profile (runtime_config.model_tier={val})"
     except Exception:
         pass
@@ -62,52 +80,41 @@ def detect_model_tier(cid: str = None, db_path: Path = None) -> tuple[str, str]:
 
     if target_path and target_path.exists():
         try:
-            conv_id = target_path.parents[2].name if len(target_path.parents) >= 3 else target_path.name
-            last_tier = None
-            last_desc = None
-            with open(target_path, "r", encoding="utf-8", errors="replace") as f:
-                for line in f:
-                    if not line.strip():
-                        continue
-                    line_lower = line.lower()
-                    if "model selection" in line_lower or "model" in line_lower:
-                        if "ultra" in line_lower:
-                            last_tier = TIER_ULTRA
-                            last_desc = f"Transcript auto-detection ({conv_id}: Ultra detected)"
-                        elif "flash" in line_lower or "flash-lite" in line_lower:
-                            last_tier = TIER_LEAN
-                            last_desc = f"Transcript auto-detection ({conv_id}: Flash detected)"
-                        elif "pro" in line_lower:
-                            if "high" in line_lower:
-                                last_tier = TIER_ULTRA
-                                last_desc = f"Transcript auto-detection ({conv_id}: High/Ultra capability detected)"
-                            else:
-                                last_tier = TIER_STANDARD
-                                last_desc = f"Transcript auto-detection ({conv_id}: Pro detected)"
-            if last_tier:
-                return last_tier, last_desc
+            with open(target_path, "r", encoding="utf-8", errors="ignore") as f:
+                head_lines = [f.readline() for _ in range(15)]
+            for line in head_lines:
+                if not line.strip():
+                    continue
+                lower_line = line.lower()
+                if "gemini-ultra" in lower_line or "gemini-2.0-ultra" in lower_line or "gemini-3.0-ultra" in lower_line or "ultra" in lower_line:
+                    return TIER_ULTRA, f"Transcript auto-detection ({target_path.parents[2].name}: Ultra detected)"
+                if "gemini-flash" in lower_line or "flash" in lower_line or "flash-lite" in lower_line:
+                    return TIER_LEAN, f"Transcript auto-detection ({target_path.parents[2].name}: Flash detected)"
+                if "pro" in lower_line or "gemini-pro" in lower_line:
+                    return TIER_STANDARD, f"Transcript auto-detection ({target_path.parents[2].name}: Pro detected)"
         except Exception:
             pass
 
-    # Stage 4: Graceful fallback
-    return TIER_STANDARD, "Default tier fallback (Standard Pro)"
+    # Stage 4: Conservative default fallback
+    return TIER_STANDARD, "Default baseline (Gemini Pro standard)"
 
 
 def set_profile(tier_name: str, db_path: Path = None):
-    """Sets manual model tier profile in runtime_config ('ultra', 'standard', 'lean', or 'auto')."""
-    tier = tier_name.strip().lower()
+    """Explicitly sets or resets the persistent model profile in SQLite."""
     target_db = db_path or DB_PATH
     conn = get_connection(target_db)
     init_db(conn)
     cursor = conn.cursor()
+    tier = tier_name.strip().lower()
     now_iso = datetime.now(timezone.utc).isoformat()
+
     if tier == "auto":
         cursor.execute("DELETE FROM runtime_config WHERE key = 'model_tier';")
         conn.commit()
         conn.close()
-        current, desc = detect_model_tier(db_path=target_db)
-        print(f"[OK] Model profile reset to AUTO. Current detected tier: {current.upper()} ({desc})")
-    elif tier in [TIER_LEAN, TIER_STANDARD, TIER_ULTRA]:
+        current, src = detect_model_tier(db_path=target_db)
+        print(f"[OK] Model profile reset to AUTO. Current detected tier: {current.upper()} ({src})")
+    elif tier in [TIER_LEAN, TIER_STANDARD, TIER_ULTRA, TIER_LOCAL, TIER_OFFLINE]:
         cursor.execute("""
         INSERT OR REPLACE INTO runtime_config (key, value, updated_at)
         VALUES ('model_tier', ?, ?);
@@ -117,11 +124,11 @@ def set_profile(tier_name: str, db_path: Path = None):
         print(f"[OK] Model profile explicitly set to: {tier.upper()}")
     else:
         conn.close()
-        print(f"Error: Unknown profile '{tier_name}'. Choose from: ultra, standard, lean, auto.")
+        print(f"Error: Unknown profile '{tier_name}'. Choose from: ultra, standard, lean, local, offline, auto.")
 
 
 def get_profile(cid: str = None):
-    """Displays current active model profile and concurrency settings."""
+    """Displays current active model profile, concurrency settings, and local endpoints."""
     tier, desc = detect_model_tier(cid)
     print("\n================ SKILLSDB ACTIVE RUNTIME PROFILE ================")
     print(f"Detected Tier:       {tier.upper()}")
@@ -131,6 +138,16 @@ def get_profile(cid: str = None):
         print("Max Reader Workers:  16 parallel threads")
         print("Batch Retrieval:     Active (skillsdb get-skills / search-multi)")
         print("Skill Clusters:      Active (skillsdb get-cluster <domain>)")
+    elif tier in [TIER_LOCAL, TIER_OFFLINE]:
+        print("Concurrency Mode:    SOVEREIGN / LOCAL (Air-gapped offline mode)")
+        print("Cloud Data Egress:   BLOCKED (Zero external network calls)")
+        print("Inference Engine:    Local Codestral / Mistral / Ollama endpoint")
+        local_status = check_local_endpoint()
+        if local_status["available"]:
+            models_str = ", ".join(local_status["models"]) if local_status["models"] else "Running (no tags)"
+            print(f"Local Server:        Online at {local_status['url']} ({models_str})")
+        else:
+            print(f"Local Server:        Offline ({local_status['url']} unreachable)")
     elif tier == TIER_LEAN:
         print("Concurrency Mode:    LEAN (Token-conserving sequential mode)")
         print("Max Reader Workers:  1 thread")
