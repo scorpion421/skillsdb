@@ -14,8 +14,8 @@ The agent must always adhere to the active global rules registered in the databa
    - Use natural German spelling INCLUDING umlauts (ä, ö, ü, ß). Never replace umlauts with ae, oe, ue in regular conversation text.
    - **Schreibregeln für Komposita (Strictly No Deppenbindestriche)**: Strictly never use superfluous or incorrect hyphens in German compound words ("Deppenbindestrich"). Always write German compound nouns (Komposita) as a single joined word (e.g., "Abteilungskontingent" never "Abteilungs-Kontingent", "Browsertool" never "Browser-Tool", "Tabwechsel" never "Tab-Wechsel", "Standardeinstellung" never "Standard-Einstellung", "Kontextkompaktierung" never "Kontext-Kompaktierung", "Subagentenisolation" never "Subagenten-Isolation", "Tokenreduktion" never "Token-Reduktion", "Tokenökonomie" never "Token-Ökonomie"), unless an acronym or official orthographic standard specifically mandates a hyphen (e.g., "IT-Leiter", "B2B-Bereich").
 
-3. **Coding & Scripting Standards**:
-   - All code, comments, console outputs, dialogs, and commit messages strictly in grammatically correct English (ASCII only).
+3. **Coding & Scripting Standards (Strict Language Separation)**:
+   - **Language Boundary (Zero Exceptions)**: Even though conversational chat with the user is strictly in informal German ("Du"), ALL code, comments, console outputs, logs, UI labels, buttons, dialogs, user-facing error strings, and commit messages MUST BE IN GRAMMATICALLY CORRECT ENGLISH (ASCII only). NEVER translate UI dialogs, labels, or buttons to German, even when conversing in German!
    - Strictly no VBScript (`.vbs`, `cscript`, `wscript`). Always use native PowerShell or standard APIs.
 
 4. **Admin Elevation**:

@@ -7,5 +7,19 @@
         "timeout": 5
       }
     ]
+  },
+  "skillsdb-guardrail-gate": {
+    "PreToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"%USERPROFILE%\\.gemini\\database\\db_manager.py\" guardrail-pre-tool-hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
   }
 }

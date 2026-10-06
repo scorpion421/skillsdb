@@ -20,6 +20,7 @@ from .core.guardrails import (
     check_workspace,
     verify_task,
     fix_file,
+    handle_pre_tool_guardrail_hook,
 )
 from .core.fim import (
     slice_fim,
@@ -125,6 +126,7 @@ def build_parser() -> argparse.ArgumentParser:
     update_parser.add_argument("--check", action="store_true", help="Only check for updates (alias for check-update)")
 
     subparsers.add_parser("mem-pre-invocation-hook", help="Internal Antigravity lifecycle hook handler")
+    subparsers.add_parser("guardrail-pre-tool-hook", help="Internal Antigravity PreToolUse lifecycle hook handler")
 
     # Native MCP Server Command (Mistral / Multi-Client Connector)
     subparsers.add_parser("mcp-serve", help="Run SkillsDB as a native Model Context Protocol (MCP) server over stdio")
@@ -347,6 +349,10 @@ def main(argv: list[str] = None):
 
     if args.command == "mem-pre-invocation-hook":
         handle_pre_invocation_hook()
+        return
+
+    if args.command == "guardrail-pre-tool-hook":
+        handle_pre_tool_guardrail_hook()
         return
 
     # Route native MCP Server

@@ -727,6 +727,33 @@ def handle_pre_invocation_hook():
     tier, tdesc = detect_model_tier()
     lines = []
 
+    # 0. Global Turn-1 Invariant Guardrails (Strict English for maximum LLM attention weight & adherence)
+    guardrail_lines = [
+        "[SKILLSDB CRITICAL GUARDRAIL & INVARIANTS (TURN 1)]",
+        "MANDATORY OPERATIONAL DIRECTIVES FOR ALL CONVERSATION TURNS:",
+        "1. STRICT LANGUAGE SEPARATION (ZERO TOLERANCE):",
+        "   - Conversational Chat: Strictly informal German (\"Du\", natural spelling with umlauts: ä, ö, ü, ß).",
+        "   - Code, Artifacts & UI: 100% English (ASCII only). ALL code, comments, console outputs, logs, UI labels, buttons, dialogs, user-facing error strings, and commit messages MUST BE IN GRAMMATICALLY CORRECT ENGLISH. NEVER translate UI dialogs, labels, or buttons to German, even when conversing in German.",
+        "   - Clean Typography: Strictly NO em-dashes (Unicode U+2014) or en-dashes (Unicode U+2013); always use standard ASCII hyphens (-), colons (:), or parentheses. Strictly NO emojis.",
+        "   - German Orthography: Strictly NO 'Deppenbindestriche' in German compound words (e.g. write 'Abteilungskontingent' never 'Abteilungs-Kontingent', 'Kontextkompaktierung' never 'Kontext-Kompaktierung').",
+        "2. AUTONOMOUS PROJECT MEMORY & CONTINUITY:",
+        "   - On any non-trivial technical task or workspace: Silently initialize/inspect project memory ('skillsdb mem-get-context' or 'skillsdb mem-init') and query domain skills ('skillsdb suggest \"<task>\"') without waiting for user prompting.",
+        "   - Silently persist lasting architectural decisions ('skillsdb mem-save-decision') and milestone snapshots ('skillsdb mem-save-snapshot').",
+        "3. VERIFICATION INTEGRITY:",
+        "   - Never deliver untested code, broken shortcuts, or unverified event listeners. Always verify DOM and UI behavior in a real or simulated harness (e.g. jsdom / test harness) before declaring success.\n"
+    ]
+    lines.append("\n".join(guardrail_lines))
+
+    # Auto-initialize project memory if workspace has files
+    if not db_path.exists() and root_path.exists():
+        try:
+            has_files = any(f for f in root_path.iterdir() if f.name != ".agents")
+            if has_files:
+                conn = get_project_connection(root_path)
+                conn.close()
+        except Exception:
+            pass
+
     if tier == TIER_ULTRA:
         lines.append("[SKILLSDB RUNTIME PROFILE: GEMINI ULTRA (16-thread high-concurrency mode)]")
         lines.append("Parallel batch fetching active: 'skillsdb get-skills <s1> <s2>' | Clusters: 'skillsdb get-cluster <domain>' | Parallel search: 'skillsdb search-multi <q1> <q2>' | Concurrent subagents: 8-16 parallel workers supported.\n")

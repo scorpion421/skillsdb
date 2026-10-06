@@ -1035,6 +1035,47 @@ def verify_task(
     }
 
 
+def handle_pre_tool_guardrail_hook():
+    """
+    Handles Antigravity PreToolUse lifecycle hook.
+    Validates tool arguments for write_to_file and replace_file_content to enforce:
+    1. Zero em-dashes (Unicode U+2014) and zero en-dashes (Unicode U+2013).
+    2. Zero emojis or decorative Unicode symbols.
+    3. Secret/credential leak prevention.
+    Returns: {"decision": "allow"} or {"decision": "deny", "reason": "..."}
+    """
+    try:
+        payload_raw = sys.stdin.read()
+        payload = json.loads(payload_raw) if payload_raw.strip() else {}
+    except Exception:
+        print(json.dumps({"decision": "allow"}))
+        return
+
+    tool_call = payload.get("toolCall", {})
+    args = tool_call.get("args", {})
+    target_file = args.get("TargetFile", "<tool_input>")
+
+    content_items = []
+    if "CodeContent" in args and isinstance(args["CodeContent"], str):
+        content_items.append(("CodeContent", args["CodeContent"]))
+    if "ReplacementContent" in args and isinstance(args["ReplacementContent"], str):
+        content_items.append(("ReplacementContent", args["ReplacementContent"]))
+
+    for field_name, content in content_items:
+        violations = check_text(content, filename=target_file)
+        critical_violations = [v for v in violations if v.get("severity") == "CRITICAL"]
+        if critical_violations:
+            first = critical_violations[0]
+            reason = (
+                f"SkillsDB Guardrail Blocked Code Modification ({first['rule']}): "
+                f"{first['message']} In snippet: '{first['snippet']}'"
+            )
+            print(json.dumps({"decision": "deny", "reason": reason}))
+            return
+
+    print(json.dumps({"decision": "allow"}))
+
+
 # =====================================================================
 # SECTION: skillsdb.core.fim
 # =====================================================================
@@ -2650,6 +2691,33 @@ def handle_pre_invocation_hook():
     tier, tdesc = detect_model_tier()
     lines = []
 
+    # 0. Global Turn-1 Invariant Guardrails (Strict English for maximum LLM attention weight & adherence)
+    guardrail_lines = [
+        "[SKILLSDB CRITICAL GUARDRAIL & INVARIANTS (TURN 1)]",
+        "MANDATORY OPERATIONAL DIRECTIVES FOR ALL CONVERSATION TURNS:",
+        "1. STRICT LANGUAGE SEPARATION (ZERO TOLERANCE):",
+        "   - Conversational Chat: Strictly informal German (\"Du\", natural spelling with umlauts: ä, ö, ü, ß).",
+        "   - Code, Artifacts & UI: 100% English (ASCII only). ALL code, comments, console outputs, logs, UI labels, buttons, dialogs, user-facing error strings, and commit messages MUST BE IN GRAMMATICALLY CORRECT ENGLISH. NEVER translate UI dialogs, labels, or buttons to German, even when conversing in German.",
+        "   - Clean Typography: Strictly NO em-dashes (Unicode U+2014) or en-dashes (Unicode U+2013); always use standard ASCII hyphens (-), colons (:), or parentheses. Strictly NO emojis.",
+        "   - German Orthography: Strictly NO 'Deppenbindestriche' in German compound words (e.g. write 'Abteilungskontingent' never 'Abteilungs-Kontingent', 'Kontextkompaktierung' never 'Kontext-Kompaktierung').",
+        "2. AUTONOMOUS PROJECT MEMORY & CONTINUITY:",
+        "   - On any non-trivial technical task or workspace: Silently initialize/inspect project memory ('skillsdb mem-get-context' or 'skillsdb mem-init') and query domain skills ('skillsdb suggest \"<task>\"') without waiting for user prompting.",
+        "   - Silently persist lasting architectural decisions ('skillsdb mem-save-decision') and milestone snapshots ('skillsdb mem-save-snapshot').",
+        "3. VERIFICATION INTEGRITY:",
+        "   - Never deliver untested code, broken shortcuts, or unverified event listeners. Always verify DOM and UI behavior in a real or simulated harness (e.g. jsdom / test harness) before declaring success.\n"
+    ]
+    lines.append("\n".join(guardrail_lines))
+
+    # Auto-initialize project memory if workspace has files
+    if not db_path.exists() and root_path.exists():
+        try:
+            has_files = any(f for f in root_path.iterdir() if f.name != ".agents")
+            if has_files:
+                conn = get_project_connection(root_path)
+                conn.close()
+        except Exception:
+            pass
+
     if tier == TIER_ULTRA:
         lines.append("[SKILLSDB RUNTIME PROFILE: GEMINI ULTRA (16-thread high-concurrency mode)]")
         lines.append("Parallel batch fetching active: 'skillsdb get-skills <s1> <s2>' | Clusters: 'skillsdb get-cluster <domain>' | Parallel search: 'skillsdb search-multi <q1> <q2>' | Concurrent subagents: 8-16 parallel workers supported.\n")
@@ -3751,6 +3819,7 @@ def build_parser() -> argparse.ArgumentParser:
     update_parser.add_argument("--check", action="store_true", help="Only check for updates (alias for check-update)")
 
     subparsers.add_parser("mem-pre-invocation-hook", help="Internal Antigravity lifecycle hook handler")
+    subparsers.add_parser("guardrail-pre-tool-hook", help="Internal Antigravity PreToolUse lifecycle hook handler")
 
     # Native MCP Server Command (Mistral / Multi-Client Connector)
     subparsers.add_parser("mcp-serve", help="Run SkillsDB as a native Model Context Protocol (MCP) server over stdio")
@@ -3973,6 +4042,10 @@ def main(argv: list[str] = None):
 
     if args.command == "mem-pre-invocation-hook":
         handle_pre_invocation_hook()
+        return
+
+    if args.command == "guardrail-pre-tool-hook":
+        handle_pre_tool_guardrail_hook()
         return
 
     # Route native MCP Server

@@ -364,3 +364,45 @@ def verify_task(
         "status": "completed",
         "details": details_str,
     }
+
+
+def handle_pre_tool_guardrail_hook():
+    """
+    Handles Antigravity PreToolUse lifecycle hook.
+    Validates tool arguments for write_to_file and replace_file_content to enforce:
+    1. Zero em-dashes (Unicode U+2014) and zero en-dashes (Unicode U+2013).
+    2. Zero emojis or decorative Unicode symbols.
+    3. Secret/credential leak prevention.
+    Returns: {"decision": "allow"} or {"decision": "deny", "reason": "..."}
+    """
+    try:
+        payload_raw = sys.stdin.read()
+        payload = json.loads(payload_raw) if payload_raw.strip() else {}
+    except Exception:
+        print(json.dumps({"decision": "allow"}))
+        return
+
+    tool_call = payload.get("toolCall", {})
+    args = tool_call.get("args", {})
+    target_file = args.get("TargetFile", "<tool_input>")
+
+    content_items = []
+    if "CodeContent" in args and isinstance(args["CodeContent"], str):
+        content_items.append(("CodeContent", args["CodeContent"]))
+    if "ReplacementContent" in args and isinstance(args["ReplacementContent"], str):
+        content_items.append(("ReplacementContent", args["ReplacementContent"]))
+
+    for field_name, content in content_items:
+        violations = check_text(content, filename=target_file)
+        critical_violations = [v for v in violations if v.get("severity") == "CRITICAL"]
+        if critical_violations:
+            first = critical_violations[0]
+            reason = (
+                f"SkillsDB Guardrail Blocked Code Modification ({first['rule']}): "
+                f"{first['message']} In snippet: '{first['snippet']}'"
+            )
+            print(json.dumps({"decision": "deny", "reason": reason}))
+            return
+
+    print(json.dumps({"decision": "allow"}))
+
