@@ -6,6 +6,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.4.0] - 2026-10-06
+
+### The Imperative Guardrails & Turn-1 Cognitive Priming Release (Cognitive Guardrail Bulletin, Language Boundary Invariants & Auto-Initializing Episodic Memory)
+
+This release addresses model attention decay and instruction drift across extended, multi-turn coding sessions. By introducing dynamic Turn-1 lifecycle cognitive priming, an uncompromising language separation boundary, programmatic gatekeeper validation, and automatic zero-turn episodic memory initialization, SkillsDB ensures 100% adherence to engineering rules, coding standards, and memory protocols from the very first step.
+
+#### Key Innovations in v3.4.0:
+1. **Turn-1 Cognitive Guardrail Bulletin (`mem-pre-invocation-hook`)**:
+   - Eliminates attention attenuation ("lost in the middle") where language models prioritize immediate user prompts over top-of-system rules.
+   - On `invocationNum == 1`, dynamically injects an authoritative, high-priority English `ephemeralMessage` into `injectSteps` immediately preceding the model's turn.
+   - Authoritatively mandates the 3 fundamental operational directives:
+     - Strict Language Separation (German "Du" for conversational chat, 100% English ASCII for code, comments, logs, UI dialogs, labels, and buttons).
+     - Autonomous Project Memory (silently inspect/initialize memory and suggest domain skills).
+     - Verification Integrity (always verify DOM/UI behavior in a real or simulated harness).
+2. **Strict Language Boundary Invariant**:
+   - Explicitly resolves the language leakage anti-pattern where models conversing in German mistakenly translate user-facing UI buttons, modal dialogs, and code comments into German.
+   - Formally elevated in `AGENTS.md`, `scripting-rules` in `customizations.db`, and the active Turn-1 bulletin.
+3. **Auto-Initializing Episodic Memory**:
+   - `handle_pre_invocation_hook()` now autonomously initializes `.agents/memory.db` on Turn 1 whenever a workspace contains project files.
+   - Ensures persistent architectural tracking, decision logging, and task boards are active from second one without requiring explicit `skillsdb mem-init` invocations.
+4. **PreToolUse Hard Gatekeeper Engine (`skillsdb guardrail-pre-tool-hook`)**:
+   - Dedicated programmatic validation handler for code modification tools (`write_to_file`, `replace_file_content`).
+   - Automatically intercepts and blocks illegal Unicode em-dashes (U+2014), en-dashes (U+2013), and emojis with actionable error feedback before files are written to disk.
+5. **Data Protection & Privacy Hardening**:
+   - Comprehensive audit ensuring zero hardcoded absolute paths, private credentials, or user-identifying artifacts across all repositories and bundles.
+
+---
+
 ## [3.3.0] - 2026-10-02
 
 ### The Mistral Sovereignty & Connector Fusion (Native MCP Server, Codestral FIM Slicing & Agent Templates)

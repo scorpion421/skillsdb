@@ -1,6 +1,6 @@
 # SkillsDB: The Quad-AI Frontier Architecture & Local High-Performance Agent Engine
 
-[![Version](https://img.shields.io/badge/version-3.3.0-blue.svg)](https://github.com/scorpion421/skillsdb/releases/tag/v3.3.0)
+[![Version](https://img.shields.io/badge/version-3.4.0-blue.svg)](https://github.com/scorpion421/skillsdb/releases/tag/v3.4.0)
 [![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-blue.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/scorpion421/skillsdb)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
