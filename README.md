@@ -146,7 +146,7 @@ xychart-beta
 ### Pillar 1: Google DeepMind High-Concurrency Knowledge Engine
 * **FTS5 Full-Text Indexing**: Decouples 120+ domain skills and system rules out of the prompt and into `customizations.db`.
 * **Zero-Tool Context Injection**: Employs native Antigravity `PreInvocation` hooks (`hooks.json`) to inject active architectural decisions, facts, and open tasks into Turn 1 with zero latency and zero tool calls.
-* **Adaptive Model Tiering**: Dynamically detects Gemini Ultra vs. Standard vs. Lean models, scaling parallel retrieval workers from 4 to 16 threads.
+* **Tier-Aware Concurrency & Model Adaptation**: Scales parallel retrieval workers (4 to 16 threads for Ultra accounts) and optimizes prompt budgets based on declared subscription tiers (`profile set ultra`) with automatic session-model fallback.
 * **Multilingual Synonym Synapses**: Zero-dependency lexical dictionary expanding German technical terms and compound stems (*mehrsprachig*, *Zustandsverwaltung*, *Speicherleck*) to English domain tags (*localization*, *bloc*, *memory leak*).
 
 ### Pillar 2: Anthropic Claude Code Workflow Engine
@@ -223,14 +223,21 @@ skillsdb export-skill flutter-apply-architecture-best-practices .
 ```
 
 ### 2. High-Concurrency & Parallel Retrieval (Gemini Ultra)
+
+> [!NOTE]
+> **Subscription Tier vs. Active Chat Model**:
+> Local client tools cannot automatically inspect private Google billing accounts. If you hold a **Gemini Ultra** subscription but choose a faster model (such as Gemini Flash) for everyday tasks, declare your pricing tier once. Mentioning your tier to the agent or setting it via CLI ensures full 16-thread concurrency remains active across all sessions without being throttled to lightweight model defaults.
+
 ```powershell
 # View active model profile and concurrency settings
 skillsdb profile
 
-# Set model profile explicitly (ultra, standard, lean, local, offline, or auto)
+# Lock in your account pricing tier (ultra, standard, lean, local, offline)
 skillsdb profile set ultra
 skillsdb profile set local
 skillsdb profile set offline
+
+# Reset to automatic transcript/model detection
 skillsdb profile auto
 
 # Batch fetch multiple skills concurrently in 1 turn (up to 16 parallel threads)
@@ -376,7 +383,7 @@ All Antigravity agents running with SkillsDB adhere to 7 core directives:
 4. **Admin Elevation**: Seamless execution with elevated administrator privileges using encrypted Windows DPAPI credentials without interactive UAC prompts.
 5. **Token Efficiency**: Strict context hygiene (line-sliced file views, bounded command outputs, subagent isolation for wide searches, concise responses).
 6. **Autonomous Project Memory & Continuous Flow**: Persistent episodic memory across sessions; autonomous micro-skill routing and snapshotting; zero chat-switching interruptions.
-7. **Adaptive Model Concurrency Protocol**: Autonomous detection of model tier (`ultra`, `standard`, `lean`); 16-thread parallel batch fetching and cluster prefetching for Ultra; compact sequential micro-skills for Standard/Lean.
+7. **Adaptive Model Concurrency Protocol**: Tier-aware concurrency scaling based on configured account tier (`ultra`, `standard`, `lean`) or active session model fallback; 16-thread parallel batch fetching and cluster prefetching for Ultra; compact sequential micro-skills for Standard/Lean.
 
 ---
 
