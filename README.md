@@ -1,13 +1,13 @@
 # SkillsDB: The Quad-AI Frontier Architecture & Local High-Performance Agent Engine
 
-[![Version](https://img.shields.io/badge/version-3.4.0-blue.svg)](https://github.com/scorpion421/skillsdb/releases/tag/v3.4.0)
+[![Version](https://img.shields.io/badge/version-3.5.0-blue.svg)](https://github.com/scorpion421/skillsdb/releases/tag/v3.5.0)
 [![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-blue.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/scorpion421/skillsdb)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
 [![PowerShell](https://img.shields.io/badge/powershell-5.1%2B%20%7C%207%2B-blue.svg)](https://github.com/PowerShell/PowerShell)
 [![SQLite](https://img.shields.io/badge/database-SQLite3%20FTS5%20%7C%20WAL-lightgrey.svg)](https://www.sqlite.org/)
 [![Antigravity](https://img.shields.io/badge/compatible-Google%20Antigravity%202.0-orange.svg)](https://deepmind.google/)
-[![Tests](https://img.shields.io/badge/tests-41%2F41%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-55%2F55%20passing-brightgreen.svg)](tests/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 **SkillsDB** is an enterprise-grade knowledge indexing, retrieval, episodic memory, and agent orchestration architecture engineered for Google Antigravity and modern coding agents. It synthesizes the standout architectural strengths of the four leading frontier AI engineering teams into a unified, zero-overhead local runtime:
@@ -16,6 +16,7 @@
 * **Anthropic (Claude Code)**: Deterministic task state machine (`pending`, `in_progress`, `completed`, `blocked`), autonomous background context compaction (`mem-compact`), and path-aware directory scoping (`--cwd`).
 * **OpenAI (Agents SDK & Swarm)**: Deterministic formatting and secret guardrails with automated in-place remediation (`--fix`), scoped agent handoffs (`context_variables`), Evaluator-Optimizer task gates, and ChatGPT memory tombstoning (`fact_history`).
 * **Mistral AI (Codestral & MCP)**: Universal Model Context Protocol (MCP) JSON-RPC 2.0 stdio server (`skillsdb mcp-serve`), Codestral Fill-in-the-Middle (FIM) surgical refactoring slicing, air-gapped local sovereignty (`profile set local / offline`), and reusable agent catalog templates (`skillsdb agent`).
+* **Autonomous Local Code Memory (Gitea Integration)**: Private self-hosted Git server (`http://localhost:3000`), coupled episodic milestone commits with cryptographic SHA tracking, autonomous 3-tier lifecycle management, and background self-healing daemon startup.
 
 ---
 
@@ -354,6 +355,23 @@ skillsdb fix-utf8
 skillsdb fix-utf8 --check
 ```
 
+### 7. Gitea Server Integration & Autonomous Code Memory (v3.5)
+```powershell
+# Check Gitea connection, server version, and project repository binding
+skillsdb gitea status
+
+# Initialize Git workspace, auto-create repository on local Gitea, and set origin
+skillsdb gitea init [repo_name] [--description "My project description"] [--public]
+
+# Directly stage changes, commit, and push to Gitea origin
+skillsdb gitea sync "Refactor database query optimization"
+skillsdb gitea sync --no-push
+
+# Milestone snapshotting with automatic Git commit & Gitea push
+skillsdb mem-save-snapshot "Completed v3.5 Gitea integration" --next-steps "Deploy to staging"
+skillsdb mem-save-snapshot "WIP experiment" --no-git
+```
+
 ---
 
 ## Windows Native UTF-8 Encoding Fix (`skillsdb fix-utf8`)
@@ -375,7 +393,7 @@ skillsdb fix-utf8
 
 ## Global System Rules
 
-All Antigravity agents running with SkillsDB adhere to 7 core directives:
+All Antigravity agents running with SkillsDB adhere to 8 core directives:
 
 1. **Universal Formatting Invariants**: Strictly no em-dashes (Unicode U+2014) or en-dashes (Unicode U+2013); strictly no emojis. Standard ASCII hyphens (-), colons (:), or parentheses are used instead.
 2. **Communication & Writing Standards**: Informal German ("Du", never "Sie") with natural German spelling including umlauts (ä, ö, ü, ß). Strict German Komposita orthography: German compound nouns must always be written as a single joined word without superfluous hyphens (strictly no Deppenbindestriche).
@@ -384,12 +402,13 @@ All Antigravity agents running with SkillsDB adhere to 7 core directives:
 5. **Token Efficiency**: Strict context hygiene (line-sliced file views, bounded command outputs, subagent isolation for wide searches, concise responses).
 6. **Autonomous Project Memory & Continuous Flow**: Persistent episodic memory across sessions; autonomous micro-skill routing and snapshotting; zero chat-switching interruptions.
 7. **Adaptive Model Concurrency Protocol**: Tier-aware concurrency scaling based on configured account tier (`ultra`, `standard`, `lean`) or active session model fallback; 16-thread parallel batch fetching and cluster prefetching for Ultra; compact sequential micro-skills for Standard/Lean.
+8. **Autonomous Local Gitea Code Memory & Lifecycle**: Private self-hosted Git server (http://localhost:3000); autonomous 3-tier lifecycle protocol (ephemeral scratch vs. living Gitea projects); coupled milestone commits with cryptographic SHA tracking; mandatory .gitignore baseline; autonomous background daemon self-healing.
 
 ---
 
 ## Evolution & Generational Milestones
 
-SkillsDB has evolved across six major engineering generations:
+SkillsDB has evolved across seven major engineering generations:
 
 ```mermaid
 flowchart LR
@@ -399,12 +418,14 @@ flowchart LR
     V4["SkillsDB v3.1\n(Architecture Fusion)\nTask State Machine\nAuto-Compaction & CWD Scope\n31 Unit Tests"]
     V5["SkillsDB v3.2\n(OpenAI Primitives Fusion)\nGuardrails & Auto-Fix\nAgent Handoff Protocol\nMemory Tombstoning\n36 Unit Tests"]
     V6["SkillsDB v3.3\n(Quad-AI Frontier Fusion)\nNative MCP Server (stdio)\nCodestral FIM Slicing\nAgent Templates Catalog\n41 Unit Tests"]
+    V7["SkillsDB v3.5\n(Autonomous Gitea Memory)\nSelf-Hosted Gitea Integration\nCoupled Git Milestones\nAuto-Start Daemon\n55 Unit Tests"]
 
     V1 -->|"Added memory & micro-skills"| V2
     V2 -->|"Added modularity & lock-free swarm"| V3
     V3 -->|"Added task state & auto-compaction"| V4
     V4 -->|"Added guardrails, handoffs & tombstoning"| V5
     V5 -->|"Added MCP, FIM & templates"| V6
+    V6 -->|"Added Gitea code memory & git coupling"| V7
 ```
 
 ---
@@ -418,7 +439,7 @@ SkillsDB/
 ├── database/
 │   ├── customizations.db       # Central SQLite database (120 skills, 10 rules, FTS5 + WAL)
 │   └── db_manager.py           # Compiled 100% standalone CLI engine (backward-compatible)
-├── skillsdb/                   # Modular 16-module Python package architecture (v3.3)
+├── skillsdb/                   # Modular 17-module Python package architecture (v3.5)
 │   ├── __init__.py             # Package exports and version metadata
 │   ├── __main__.py             # Direct execution entrypoint (python -m skillsdb)
 │   ├── cli.py                  # CLI argument parsing and command routing
@@ -434,7 +455,8 @@ SkillsDB/
 │   │   └── agent_templates.py  # Reusable agent templates catalog (Mistral Agents API pattern)
 │   ├── platform/
 │   │   ├── windows_utf8.py     # Windows UTF-8 application manifests and registry setup
-│   │   └── mcp_server.py       # Native Model Context Protocol (MCP) JSON-RPC 2.0 stdio server
+│   │   ├── mcp_server.py       # Native Model Context Protocol (MCP) JSON-RPC 2.0 stdio server
+│   │   └── gitea.py            # Local Gitea REST API client, repo provisioning, auto-start & git sync
 │   ├── search/
 │   │   ├── fts.py              # FTS5 search, micro-skills, suggestions, rules retrieval
 │   │   └── synonyms.py         # Zero-dependency multilingual synonym synapses (DE -> EN)
@@ -452,7 +474,8 @@ SkillsDB/
 │   ├── test_ultra_concurrency.py # High-concurrency, model tier, and WAL parallel test suite
 │   ├── test_v3_architecture.py # WriterQueue stress, journals, synonyms, and modular tests
 │   ├── test_v3_2_openai_fusion.py # Guardrails, agent handoffs, task verifications, and tombstoning
-│   └── test_v3_3_mistral_fusion.py # MCP server, Codestral FIM slicing, and agent templates
+│   ├── test_v3_3_mistral_fusion.py # MCP server, Codestral FIM slicing, and agent templates
+│   └── test_v3_5_gitea_integration.py # Gitea connectivity, auto-start, repo provisioning, and git coupling
 ├── deploy.ps1                  # PowerShell automated deployment script (Windows)
 ├── deploy.py                   # Python automated deployment script (Cross-platform)
 ├── .gitignore                  # Git hygiene configuration
