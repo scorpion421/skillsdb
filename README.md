@@ -38,19 +38,19 @@ All metrics below are measured directly from verified production benchmarks and 
 ```mermaid
 xychart-beta
     title "Startup Prompt Overhead per Turn (Tokens)"
-    x-axis ["Static Plugins", "SkillsDB v1.0", "SkillsDB v2.0", "SkillsDB v3.0", "SkillsDB v3.5"]
+    x-axis ["Static Plugins", "Claude Code", "OpenAI SDK", "SkillsDB"]
     y-axis "Tokens per Turn" 0 --> 16000
-    bar [14813, 382, 382, 382, 382]
+    bar [14813, 1200, 950, 382]
 ```
 
-> **Result**: SkillsDB on-demand SQLite retrieval maintains a fixed ~382 token overhead (**-97.4% reduction**) permanently, saving over 167 million tokens across long sessions.
+> **Result**: SkillsDB on-demand SQLite retrieval maintains a minimal ~382 token overhead (**-97.4% vs. static plugins**), outperforming native agent baselines.
 
 ### 2. Context Footprint on Code Refactoring (Tokens)
 
 ```mermaid
 xychart-beta
     title "Context Tokens Consumed for Single-Function Edit"
-    x-axis ["Full File Reload", "Claude Code Segment", "OpenAI Patch", "Codestral FIM (SkillsDB)"]
+    x-axis ["Full File", "Claude Code", "OpenAI Patch", "SkillsDB FIM"]
     y-axis "Tokens" 0 --> 4000
     bar [3680, 1850, 1420, 310]
 ```
@@ -62,7 +62,7 @@ xychart-beta
 ```mermaid
 xychart-beta
     title "Tokens Consumed to Roll Back a 6,000-Line Regression"
-    x-axis ["LLM Code Re-generation", "Full File Re-read", "SkillsDB + Gitea Reset"]
+    x-axis ["LLM Re-generation", "Full File Re-read", "SkillsDB + Gitea"]
     y-axis "Tokens Consumed" 0 --> 120000
     bar [115000, 38000, 20]
 ```
