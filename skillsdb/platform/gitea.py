@@ -223,6 +223,69 @@ def get_remote_url(project_root: Path, remote_name: str = "origin") -> Optional[
     return None
 
 
+UNIVERSAL_GITIGNORE_TEMPLATE = """# Environments & Secrets
+.env
+.env.*
+*.env
+credentials/
+*.credential.xml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.venv/
+venv/
+env/
+.pytest_cache/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs & artifacts
+dist/
+build/
+*.egg-info/
+target/
+bin/
+obj/
+
+# Temporary and backup files
+*.bak*
+*.tmp
+*.log
+
+# SQLite temporary journal and lock files
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Local episodic project memory (isolated per workstation)
+.agents/memory.db*
+
+# OS and IDE configuration
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+"""
+
+
+def ensure_gitignore(project_root: Path) -> bool:
+    """
+    Ensures a robust .gitignore exists in the project root.
+    If missing, creates one from the universal baseline template.
+    """
+    gitignore_path = project_root / ".gitignore"
+    if not gitignore_path.exists():
+        gitignore_path.write_text(UNIVERSAL_GITIGNORE_TEMPLATE.strip() + "\n", encoding="utf-8")
+        return True
+    return False
+
+
 def init_gitea_workspace(
     project_root: Path,
     repo_name: Optional[str] = None,
@@ -242,6 +305,8 @@ def init_gitea_workspace(
     # Initialize git if needed
     if not (root / ".git").exists():
         _run_git(["init", "-b", "main"], root)
+
+    ensure_gitignore(root)
 
     config = get_gitea_config()
     target_owner = owner or config["default_owner"]
@@ -286,6 +351,9 @@ def sync_to_gitea(
         return {"status": "skipped", "reason": "Not a git repository."}
 
     root = project_root.resolve()
+
+    # Ensure robust .gitignore exists before staging
+    ensure_gitignore(root)
 
     # Stage changes
     _run_git(["add", "-A"], root)

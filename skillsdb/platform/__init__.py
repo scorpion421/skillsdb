@@ -10,6 +10,7 @@ from .gitea import (
     init_gitea_workspace,
     sync_to_gitea,
     get_gitea_config,
+    ensure_gitignore,
 )
 
 __all__ = [
@@ -21,4 +22,5 @@ __all__ = [
     "init_gitea_workspace",
     "sync_to_gitea",
     "get_gitea_config",
+    "ensure_gitignore",
 ]

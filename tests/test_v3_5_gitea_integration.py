@@ -21,6 +21,7 @@ from skillsdb.platform.gitea import (
     get_remote_url,
     init_gitea_workspace,
     sync_to_gitea,
+    ensure_gitignore,
 )
 from skillsdb.memory.project_memory import (
     init_project_db,
@@ -128,6 +129,26 @@ class TestGiteaIntegration(unittest.TestCase):
         output = captured.getvalue()
         self.assertIn("GITEA LOCAL INTEGRATION STATUS", output)
         self.assertIn("Gitea Instance: [CONNECTED]", output)
+
+    def test_ensure_gitignore_auto_generation(self):
+        proj_dir = self.temp_dir / "my_project"
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        gi_path = proj_dir / ".gitignore"
+        self.assertFalse(gi_path.exists())
+
+        created = ensure_gitignore(proj_dir)
+        self.assertTrue(created)
+        self.assertTrue(gi_path.exists())
+
+        content = gi_path.read_text(encoding="utf-8")
+        self.assertIn(".env", content)
+        self.assertIn("node_modules/", content)
+        self.assertIn("__pycache__/", content)
+        self.assertIn(".agents/memory.db*", content)
+
+        # Calling again should not overwrite
+        created_again = ensure_gitignore(proj_dir)
+        self.assertFalse(created_again)
 
 
 if __name__ == "__main__":
