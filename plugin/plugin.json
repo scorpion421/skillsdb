@@ -1,4 +1,5 @@
 {
   "name": "customizations-db",
-  "description": "Centralized database integration for system rules and workflow skills"
+  "description": "Centralized database integration for system rules, workflow skills, and project orchestration",
+  "logo": "assets/logo.svg"
 }

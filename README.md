@@ -1,25 +1,26 @@
 # SkillsDB: High-Performance Knowledge, Episodic Memory & Autonomous Code Infrastructure
 
-[![Version](https://img.shields.io/badge/version-3.5.0-blue.svg)](CHANGELOG.md)
-[![Tests](https://img.shields.io/badge/tests-55%2F55%20passing-brightgreen.svg)](tests/)
+[![Version](https://img.shields.io/badge/version-3.6.0-blue.svg)](CHANGELOG.md)
+[![Tests](https://img.shields.io/badge/tests-60%2F60%20passing-brightgreen.svg)](tests/)
 [![Antigravity](https://img.shields.io/badge/compatible-Google%20Antigravity%202.0-orange.svg)](https://deepmind.google/)
 [![Database](https://img.shields.io/badge/database-SQLite3%20FTS5%20%7C%20WAL-lightgrey.svg)](https://www.sqlite.org/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**SkillsDB** is a lightweight, zero-overhead knowledge indexing, episodic memory, and autonomous Git orchestration engine engineered for Google Antigravity and modern coding agents. It solves the three fundamental failure modes of local AI development:
+**SkillsDB** is a lightweight, zero-overhead knowledge indexing, episodic memory, and autonomous Git orchestration engine engineered for Google Antigravity and modern coding agents. It solves the fundamental failure modes of local AI development:
 
 1. **System Prompt Bloat**: Eliminates tens of thousands of static plugin tokens injected into every turn.
 2. **Context Amnesia**: Persists tasks, architectural decisions, and configuration facts across session restarts.
 3. **Catastrophic Code Loss**: Couples episodic milestones directly with local Gitea Git infrastructure for sub-second, cryptographic rollback immunity.
+4. **Headless Blindness**: Embeds a native Antigravity UI Extension sidecar panel (`SIDECAR_UI_ENTRYPOINT_AUX_PANE`) for zero-token live task boards, decision trails, and Gitea milestone rollbacks.
 
 ---
 
 ## Verified Production Impact: Without vs. With SkillsDB
 
-All metrics below are measured directly from verified production benchmarks and the local 55-test test suite:
+All metrics below are measured directly from verified production benchmarks and the local 60-test test suite:
 
-| Developer Challenge | Default Agent (Without SkillsDB) | SkillsDB v3.5 (Locally Integrated) | Measured Real-World Impact |
+| Developer Challenge | Default Agent (Without SkillsDB) | SkillsDB v3.6 (Locally Integrated) | Measured Real-World Impact |
 | :--- | :--- | :--- | :--- |
 | **Startup Prompt Overhead** | ~14,813 tokens injected per turn | **~382 tokens** | **-97.4% prompt bloat reduction** |
 | **Function Refactoring** | Full file reload (~3,680 tokens) | **Codestral FIM Slicing (~310 tokens)** | **-91.6% context tokens per code edit** |
@@ -155,9 +156,9 @@ skillsdb gitea status
 
 ---
 
-## Verification & Verified Test Suite (55/55 Passing)
+## Verification & Verified Test Suite (60/60 Passing)
 
-SkillsDB is verified with 100% passing local automated unit tests across 6 dedicated test modules:
+SkillsDB is verified with 100% passing local automated unit tests across 7 dedicated test modules:
 
 | Test Module | Coverage Area | Status |
 | :--- | :--- | :--- |
@@ -167,7 +168,8 @@ SkillsDB is verified with 100% passing local automated unit tests across 6 dedic
 | `tests/test_v3_2_openai_fusion.py` | Formatting guardrails, auto-fix, agent handoffs, memory tombstoning | **Passing (5 tests)** |
 | `tests/test_v3_3_mistral_fusion.py` | MCP stdio server, Codestral FIM chunking, agent templates | **Passing (5 tests)** |
 | `tests/test_v3_5_gitea_integration.py` | Gitea REST API, auto-start daemon, repo provisioning, git coupling | **Passing (14 tests)** |
-| **Total Test Suite** | **Comprehensive end-to-end verification** | **55/55 Passing (100%)** |
+| `tests/test_v3_6_ui_extension.py` | Antigravity sidecar manifests, logo assets, UI bridge, SQLite queries | **Passing (5 tests)** |
+| **Total Test Suite** | **Comprehensive end-to-end verification** | **60/60 Passing (100%)** |
 
 Run tests locally at any time:
 ```powershell

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SkillsDB</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/preload.js"></script>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <img src="/assets/logo.svg" alt="SkillsDB" class="brand-logo" onerror="this.style.display='none'">
+      <div class="brand-text">
+        <h1>SkillsDB</h1>
+        <span>Orchestration & Memory</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div id="status-gitea" class="status-indicator">
+        <span id="gitea-dot" class="status-dot"></span>
+        <span id="gitea-text">Gitea</span>
+      </div>
+      <button id="btn-refresh" class="btn-icon" title="Refresh state" aria-label="Refresh">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Navigation Tab Bar -->
+  <nav class="tab-bar">
+    <button class="tab-btn active" data-tab="tasks">
+      Tasks <span id="badge-tasks" class="tab-badge">0</span>
+    </button>
+    <button class="tab-btn" data-tab="decisions">
+      Decisions <span id="badge-decisions" class="tab-badge">0</span>
+    </button>
+    <button class="tab-btn" data-tab="facts">
+      Facts <span id="badge-facts" class="tab-badge">0</span>
+    </button>
+    <button class="tab-btn" data-tab="milestones">
+      Milestones <span id="badge-milestones" class="tab-badge">0</span>
+    </button>
+  </nav>
+
+  <!-- Viewport -->
+  <main class="viewport">
+
+    <!-- TAB 1: Tasks -->
+    <section id="pane-tasks" class="tab-pane active">
+      <!-- Add Task Form -->
+      <div class="task-form-card">
+        <input type="text" id="new-task-title" class="input-text" placeholder="Add task title (e.g. Refactor API handler)...">
+        <div class="task-form-row">
+          <select id="new-task-priority" class="select-custom">
+            <option value="med">Priority: Medium</option>
+            <option value="high">Priority: High</option>
+            <option value="critical">Priority: Critical</option>
+            <option value="low">Priority: Low</option>
+          </select>
+          <select id="new-task-status" class="select-custom">
+            <option value="pending">Status: Pending</option>
+            <option value="in_progress">Status: In Progress</option>
+          </select>
+          <button id="btn-add-task" class="btn-primary">Add Task</button>
+        </div>
+      </div>
+
+      <!-- Task Filter Bar -->
+      <div class="filter-bar">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="in_progress">In Progress</button>
+        <button class="filter-btn" data-filter="pending">Pending</button>
+        <button class="filter-btn" data-filter="completed">Completed</button>
+        <button class="filter-btn" data-filter="blocked">Blocked</button>
+      </div>
+
+      <!-- Tasks List -->
+      <div id="tasks-list" class="card-list">
+        <div class="empty-state">Loading tasks...</div>
+      </div>
+    </section>
+
+    <!-- TAB 2: Decisions -->
+    <section id="pane-decisions" class="tab-pane">
+      <div id="decisions-list" class="card-list">
+        <div class="empty-state">Loading decisions...</div>
+      </div>
+    </section>
+
+    <!-- TAB 3: Facts -->
+    <section id="pane-facts" class="tab-pane">
+      <div class="card" style="margin-bottom: 12px;">
+        <div class="card-title" style="margin-bottom: 6px;">Active Project Facts</div>
+        <div id="facts-list">
+          <div class="empty-state">Loading active facts...</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom: 6px;">Tombstone History (Reconciled / Deprecated)</div>
+        <div id="facts-history">
+          <div class="empty-state">No tombstoned facts recorded.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: Milestones -->
+    <section id="pane-milestones" class="tab-pane">
+      <div id="milestones-list" class="card-list">
+        <div class="empty-state">Loading milestone snapshots...</div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast-box" hidden></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

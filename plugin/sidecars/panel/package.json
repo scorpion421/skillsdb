@@ -1,0 +1,7 @@
+{
+  "name": "skillsdb-panel",
+  "version": "3.6.0",
+  "description": "SkillsDB live task board, decision trail, and Gitea code memory panel for Antigravity",
+  "type": "module",
+  "private": true
+}
