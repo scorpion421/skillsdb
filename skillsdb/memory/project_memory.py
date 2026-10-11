@@ -13,6 +13,7 @@ from ..config import TIER_ULTRA, DB_PATH, __version__
 from ..core.detector import detect_model_tier
 from .writer_queue import get_writer_queue, flush_journals
 from ..search.fts import detect_cwd_hints
+from ..platform.gitea import is_git_repo, sync_to_gitea
 
 
 def find_project_root(start_path: Path = None) -> Path:
@@ -74,9 +75,16 @@ def init_project_db(conn: sqlite3.Connection):
         summary TEXT NOT NULL,
         next_steps TEXT,
         files_touched TEXT,
+        git_commit_hash TEXT DEFAULT NULL,
         created_at TEXT NOT NULL
     );
     """)
+    # Check if git_commit_hash column exists in existing databases
+    cursor.execute("PRAGMA table_info(session_snapshots);")
+    snap_cols = {row[1] for row in cursor.fetchall()}
+    if "git_commit_hash" not in snap_cols:
+        cursor.execute("ALTER TABLE session_snapshots ADD COLUMN git_commit_hash TEXT DEFAULT NULL;")
+
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS project_facts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -194,19 +202,44 @@ def mem_save_decision(conn: sqlite3.Connection, title: str, content: str, catego
     print(f"Project decision saved (ID {row_id}): '{title}'")
 
 
-def mem_save_snapshot(conn: sqlite3.Connection, summary: str, conversation_id: str = None, next_steps: str = None, files_touched: str = None, db_path: Path = None, silent: bool = False):
-    """Saves a session milestone snapshot."""
+def mem_save_snapshot(
+    conn: sqlite3.Connection,
+    summary: str,
+    conversation_id: str = None,
+    next_steps: str = None,
+    files_touched: str = None,
+    db_path: Path = None,
+    silent: bool = False,
+    git_sync: bool = True,
+    git_push: bool = True,
+):
+    """Saves a session milestone snapshot and optionally synchronizes with Git and Gitea."""
     now_iso = datetime.now(timezone.utc).isoformat()
     cid = conversation_id or os.environ.get("ANTIGRAVITY_CONVERSATION_ID") or "default"
     target_path = db_path or (Path(conn.cursor().execute("PRAGMA database_list;").fetchone()[2]) if conn else None)
+
+    git_hash = None
+    git_pushed = False
+    if git_sync:
+        try:
+            root = Path(target_path).parent.parent if target_path else find_project_root()
+            if is_git_repo(root):
+                res = sync_to_gitea(root, message=f"Milestone: {summary}", push=git_push)
+                git_hash = res.get("commit_hash")
+                git_pushed = res.get("pushed", False)
+        except Exception:
+            pass
+
+    commit_tag = f" [Git: {git_hash[:7]}]" if git_hash else ""
+    push_tag = " [Gitea synced]" if git_pushed else ""
 
     if target_path and Path(target_path).exists():
         wq = get_writer_queue(target_path)
         def _write(cur):
             cur.execute("""
-            INSERT INTO session_snapshots (conversation_id, summary, next_steps, files_touched, created_at)
-            VALUES (?, ?, ?, ?, ?);
-            """, (cid, summary, next_steps or "", files_touched or "", now_iso))
+            INSERT INTO session_snapshots (conversation_id, summary, next_steps, files_touched, git_commit_hash, created_at)
+            VALUES (?, ?, ?, ?, ?, ?);
+            """, (cid, summary, next_steps or "", files_touched or "", git_hash, now_iso))
             row_id = cur.lastrowid
             cur.execute("""
             INSERT INTO project_memory_fts (source_table, title_or_key, content)
@@ -215,14 +248,14 @@ def mem_save_snapshot(conn: sqlite3.Connection, summary: str, conversation_id: s
             return row_id
         row_id = wq.execute_write(_write)
         if not silent:
-            print(f"Session snapshot saved (ID {row_id}) for conversation: {cid}")
+            print(f"Session snapshot saved (ID {row_id}){commit_tag}{push_tag} for conversation: {cid}")
         return
 
     cursor = conn.cursor()
     cursor.execute("""
-    INSERT INTO session_snapshots (conversation_id, summary, next_steps, files_touched, created_at)
-    VALUES (?, ?, ?, ?, ?);
-    """, (cid, summary, next_steps or "", files_touched or "", now_iso))
+    INSERT INTO session_snapshots (conversation_id, summary, next_steps, files_touched, git_commit_hash, created_at)
+    VALUES (?, ?, ?, ?, ?, ?);
+    """, (cid, summary, next_steps or "", files_touched or "", git_hash, now_iso))
     row_id = cursor.lastrowid
     cursor.execute("""
     INSERT INTO project_memory_fts (source_table, title_or_key, content)
@@ -230,7 +263,7 @@ def mem_save_snapshot(conn: sqlite3.Connection, summary: str, conversation_id: s
     """, (cid, summary + " " + (next_steps or "")))
     conn.commit()
     if not silent:
-        print(f"Session snapshot saved (ID {row_id}) for conversation: {cid}")
+        print(f"Session snapshot saved (ID {row_id}){commit_tag}{push_tag} for conversation: {cid}")
 
 
 def mem_save_fact(conn: sqlite3.Connection, key: str, value: str, reason: str = None, db_path: Path = None):
@@ -589,12 +622,14 @@ def mem_get_context(conn: sqlite3.Connection, max_decisions: int = 5, project_ro
     cursor = conn.cursor()
 
     print("\n=== PROJECT MEMORY CONTEXT ===")
-    cursor.execute("SELECT summary, next_steps, created_at FROM session_snapshots ORDER BY id DESC LIMIT 1;")
+    cursor.execute("SELECT summary, next_steps, created_at, git_commit_hash FROM session_snapshots ORDER BY id DESC LIMIT 1;")
     last_snap = cursor.fetchone()
     if last_snap:
         dt = last_snap['created_at'][:10]
         print(f"\nLatest Session Milestone ({dt}):")
         print(f"  Summary:    {last_snap['summary']}")
+        if "git_commit_hash" in last_snap.keys() and last_snap["git_commit_hash"]:
+            print(f"  Git Commit: {last_snap['git_commit_hash'][:8]}")
         if last_snap['next_steps']:
             print(f"  Next Steps: {last_snap['next_steps']}")
 

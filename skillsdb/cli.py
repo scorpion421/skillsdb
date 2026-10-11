@@ -85,6 +85,14 @@ from .updater.merger import (
     sync_database,
 )
 from .platform.windows_utf8 import fix_utf8
+from .platform.gitea import (
+    check_gitea_connection,
+    init_gitea_workspace,
+    sync_to_gitea,
+    is_git_repo,
+    get_remote_url,
+    get_gitea_config,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -250,6 +258,8 @@ def build_parser() -> argparse.ArgumentParser:
     mem_snap_parser.add_argument("--next-steps", default=None, help="Next steps or open items")
     mem_snap_parser.add_argument("--files", default=None, help="Key files touched")
     mem_snap_parser.add_argument("--project", default=None, help="Project root directory (optional)")
+    mem_snap_parser.add_argument("--no-git", action="store_true", help="Skip automatic Git commit and Gitea sync")
+    mem_snap_parser.add_argument("--no-push", action="store_true", help="Commit locally without pushing to Gitea origin")
 
     mem_fact_parser = subparsers.add_parser("mem-save-fact", help="Save a key-value fact or configuration")
     mem_fact_parser.add_argument("key", help="Fact key")
@@ -338,6 +348,25 @@ def build_parser() -> argparse.ArgumentParser:
     bench_parser = subparsers.add_parser("benchmark-concurrency", help="Benchmark sequential vs. parallel multi-threaded retrieval")
     bench_parser.add_argument("--queries", type=int, default=20, help="Number of queries/skills to test (default: 20)")
     bench_parser.add_argument("--workers", type=int, default=16, help="Max worker threads (default: 16)")
+
+    # Gitea local integration
+    gitea_parser = subparsers.add_parser("gitea", help="Gitea server integration, repo management, and workspace synchronization")
+    gitea_subparsers = gitea_parser.add_subparsers(dest="gitea_action", help="Gitea sub-command")
+
+    gitea_status_p = gitea_subparsers.add_parser("status", help="Check Gitea server connectivity and project git remote status")
+    gitea_status_p.add_argument("--project", default=None, help="Project root directory (optional)")
+
+    gitea_init_p = gitea_subparsers.add_parser("init", help="Initialize Git, auto-create repository on Gitea, and configure remote")
+    gitea_init_p.add_argument("name", nargs="?", default=None, help="Repository name on Gitea (default: folder name)")
+    gitea_init_p.add_argument("--description", "-d", default="", help="Repository description")
+    gitea_init_p.add_argument("--public", action="store_true", help="Make repository public (default: private)")
+    gitea_init_p.add_argument("--owner", default=None, help="Repository owner (default: configured default owner)")
+    gitea_init_p.add_argument("--project", default=None, help="Project root directory (optional)")
+
+    gitea_sync_p = gitea_subparsers.add_parser("sync", help="Stage changes, commit, and push directly to Gitea origin")
+    gitea_sync_p.add_argument("message", nargs="?", default="Workspace sync", help="Commit message")
+    gitea_sync_p.add_argument("--no-push", action="store_true", help="Commit without pushing to remote")
+    gitea_sync_p.add_argument("--project", default=None, help="Project root directory (optional)")
 
     return parser
 
@@ -518,6 +547,66 @@ def main(argv: list[str] = None):
                 sys.exit(1)
             return
 
+    # Route Gitea Commands
+    if args.command == "gitea":
+        action = getattr(args, "gitea_action", "status") or "status"
+        target_root = Path(args.project).resolve() if getattr(args, "project", None) else find_project_root()
+
+        if action == "status":
+            print("\n=== GITEA LOCAL INTEGRATION STATUS ===")
+            conn_info = check_gitea_connection()
+            if conn_info.get("connected"):
+                print(f"  Gitea Instance: [CONNECTED] {conn_info.get('url')}")
+                print(f"  Server Version: {conn_info.get('version')}")
+                print(f"  Authenticated:  {conn_info.get('username')} (Admin: {conn_info.get('is_admin')})")
+            else:
+                print(f"  Gitea Instance: [DISCONNECTED] {conn_info.get('url')}")
+                print(f"  Error:          {conn_info.get('error')}")
+
+            print(f"\n  Project Root:   {target_root}")
+            in_git = is_git_repo(target_root)
+            print(f"  Git Workspace:  {'Yes' if in_git else 'No'}")
+            if in_git:
+                rem = get_remote_url(target_root, "origin")
+                print(f"  Origin Remote:  {rem or 'None'}")
+            print("======================================\n")
+            return
+
+        elif action == "init":
+            name = getattr(args, "name", None)
+            desc = getattr(args, "description", "")
+            pub = getattr(args, "public", False)
+            owner = getattr(args, "owner", None)
+            res = init_gitea_workspace(target_root, repo_name=name, description=desc, private=not pub, owner=owner)
+            if res.get("status") == "ready":
+                print(f"\n[OK] Gitea workspace initialized successfully!")
+                print(f"  Repository: {res.get('owner')}/{res.get('repo_name')}")
+                print(f"  Remote URL: {res.get('remote_url')}")
+                if res.get("html_url"):
+                    print(f"  Web UI:     {res.get('html_url')}")
+                print()
+            else:
+                print(f"\n[ERROR] Failed to initialize Gitea workspace: {res.get('error')}\n")
+                sys.exit(1)
+            return
+
+        elif action == "sync":
+            msg = getattr(args, "message", "Workspace sync") or "Workspace sync"
+            no_push = getattr(args, "no_push", False)
+            res = sync_to_gitea(target_root, message=msg, push=not no_push)
+            if res.get("status") in ("synced", "clean"):
+                commit_str = res.get("commit_hash")[:8] if res.get("commit_hash") else "None"
+                push_str = "Pushed to Gitea origin" if res.get("pushed") else ("Push skipped (--no-push)" if no_push else "Already up to date")
+                if res.get("push_error"):
+                    push_str = f"Push failed: {res.get('push_error')}"
+                print(f"\n[OK] Workspace synchronized with Gitea.")
+                print(f"  Commit: {commit_str}")
+                print(f"  Status: {push_str}\n")
+            else:
+                print(f"\n[ERROR] Sync failed: {res.get('error') or res.get('reason')}\n")
+                sys.exit(1)
+            return
+
     # Route project memory commands directly to project database
     if args.command and args.command.startswith("mem-"):
         proj_root = Path(args.project) if getattr(args, "project", None) else find_project_root()
@@ -531,7 +620,15 @@ def main(argv: list[str] = None):
         if args.command == "mem-save-decision":
             mem_save_decision(pconn, args.title, args.content, args.category)
         elif args.command == "mem-save-snapshot":
-            mem_save_snapshot(pconn, args.summary, conversation_id=args.cid, next_steps=args.next_steps, files_touched=args.files)
+            mem_save_snapshot(
+                pconn,
+                args.summary,
+                conversation_id=args.cid,
+                next_steps=args.next_steps,
+                files_touched=args.files,
+                git_sync=not getattr(args, "no_git", False),
+                git_push=not getattr(args, "no_push", False),
+            )
         elif args.command == "mem-save-fact":
             mem_save_fact(pconn, args.key, args.value, reason=args.reason)
         elif args.command == "mem-deprecate-fact":
