@@ -24,7 +24,7 @@
 
 SkillsDB is continuously verified in production across real-world software engineering workflows. The following telemetry is measured directly from active developer environments:
 
-| Metric | Traditional Static Plugins | SkillsDB v3.3 Architecture (Quad-AI Fusion) | Verified Real-World Impact |
+| Metric | Traditional Static Plugins | SkillsDB v3.5 Architecture (Quad-AI & Gitea Fusion) | Verified Real-World Impact |
 | :--- | :--- | :--- | :--- |
 | **Startup Prompt Overhead** | ~14,813 tokens injected per turn | **~382 tokens** | **-97.4% prompt bloat reduction** |
 | **Tracked Production Sessions** | N/A | **38 active sessions** | Measured across actual engineering projects |
@@ -52,18 +52,20 @@ flowchart TD
         M["Mistral AI (Codestral & MCP)\n* Native MCP Stdio Server (JSON-RPC)\n* Surgical FIM Code Slicing (-91%)\n* Local Sovereignty & Agent Catalog"]
     end
 
-    subgraph SkillsDBEngine ["SkillsDB v3.3: Unified Local Engine"]
+    subgraph SkillsDBEngine ["SkillsDB v3.5: Unified Local Engine & Code Memory"]
         CentralDB[("customizations.db\n120+ Skills | 10 Rules\nAgent Templates | FTS5 + WAL")]
         ProjectMem[("Project Memory (.agents/memory.db)\nTasks | Decisions | Facts | Handoffs")]
         GuardEngine["Guardrail & Verification Engine\n(Invariants, Secrets, Unittests)"]
         FIMEngine["Codestral FIM Slicer\n(Prefix, Suffix, Middle)"]
         MCPServer["MCP JSON-RPC 2.0 Server\n(Universal IDE & Agent Bus)"]
+        GiteaBridge["Gitea Code Memory Bridge\n(Auto-Repo, Git Push & Daemon Auto-Start)"]
     end
 
-    subgraph Workflows ["Development Environments & Workflows"]
+    subgraph Infrastructure ["Local Code Memory & Workflows"]
         AGY["Google Antigravity 2.0"]
         EXT["MCP Clients (Cursor, Continue.dev, Claude Desktop)"]
         LOCAL["Local Air-Gapped Models (Ollama, Codestral, vLLM)"]
+        GITEA["Local Gitea Server\n(http://localhost:3000)"]
     end
 
     G --> CentralDB
@@ -74,6 +76,8 @@ flowchart TD
 
     CentralDB <--> SkillsDBEngine
     ProjectMem <--> SkillsDBEngine
+    ProjectMem --> GiteaBridge
+    GiteaBridge <--> GITEA
     SkillsDBEngine <--> AGY
     MCPServer <--> EXT
     SkillsDBEngine <--> LOCAL
@@ -88,12 +92,12 @@ flowchart TD
 ```mermaid
 xychart-beta
     title "Startup Prompt Overhead per Turn (Tokens)"
-    x-axis ["Static", "v1.0", "v2.0", "v3.0", "v3.1", "v3.2", "v3.3"]
+    x-axis ["Static", "v1.0", "v2.0", "v3.0", "v3.1", "v3.2", "v3.3", "v3.4", "v3.5"]
     y-axis "Tokens per Turn" 0 --> 16000
-    bar [14813, 382, 382, 382, 382, 382, 382]
+    bar [14813, 382, 382, 382, 382, 382, 382, 382, 382]
 ```
 
-> **Legend**: `Static` represents legacy eager plugin loading (~14,813 tokens/turn). `v1.0` through `v3.3` represent SkillsDB on-demand SQLite retrieval, permanently maintaining a minimal ~382 token overhead (**-97.4% reduction**) regardless of added features.
+> **Legend**: `Static` represents legacy eager plugin loading (~14,813 tokens/turn). `v1.0` through `v3.5` represent SkillsDB on-demand SQLite retrieval, permanently maintaining a minimal ~382 token overhead (**-97.4% reduction**) regardless of added features.
 
 ### 2. Context Footprint on Single-Function Code Refactoring
 
@@ -127,7 +131,7 @@ xychart-beta
 
 ### 4. Quad-AI Frontier Feature Comparison Matrix
 
-| Dimension / Capability | Google Standalone (Antigravity Plugins) | Anthropic Standalone (Claude Code) | OpenAI Standalone (Agents SDK) | Mistral Standalone (Codestral API) | SkillsDB v3.3 (Quad-AI Fusion) | Verified Live Production Impact |
+| Dimension / Capability | Google Standalone (Antigravity Plugins) | Anthropic Standalone (Claude Code) | OpenAI Standalone (Agents SDK) | Mistral Standalone (Codestral API) | SkillsDB v3.5 (Quad-AI & Gitea Fusion) | Verified Live Production Impact |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Startup Prompt Overhead** | ~14,813 tokens / turn | ~1,200 tokens / turn | ~950 tokens / turn | ~1,100 tokens / turn | **~382 tokens / turn** | **-97.4% prompt bloat reduction** |
 | **Multi-Agent Write Concurrency** | Lock errors (`database locked`) | Single process CLI | Cloud state only | Stateless API | **Lock-free WriterQueue (16 threads)** | **0 database write lock collisions** |
@@ -137,6 +141,7 @@ xychart-beta
 | **Safety & Formatting Guardrails** | None | Ad-hoc system prompt | Exception-throwing guards | Content moderation | **Zero-Friction Guardrails (`--fix`)** | 100% adherence; 0 workflow interruptions |
 | **Memory Tombstoning** | None | Compaction only | Key overwrite | Stateless | **Append-only `fact_history` audit** | Stale facts tombstoned; zero drift |
 | **Protocol Interoperability** | Antigravity only | Claude Code only | OpenAI SDK only | Native MCP | **Native MCP Server (stdio JSON-RPC)** | Universal (AGY, Cursor, Continue, Claude) |
+| **Autonomous Code Memory** | None | Git integration via CLI | Cloud Git sync | None | **Autonomous Local Gitea Memory** | Automatic Git milestone commits & Gitea push |
 | **Offline / Air-Gapped Mode** | No (Cloud only) | No (Cloud only) | No (Cloud only) | Local Ollama/vLLM weights | **Local Sovereignty Profile (`offline`)** | Zero external calls; sub-ms local SQLite |
 | **Cumulative Verified ROI** | 0 tokens saved (full burn) | N/A | N/A | N/A | **167,647,740 tokens saved** | **~$1,257.36 USD saved (Gemini Ultra)** |
 
@@ -408,7 +413,7 @@ All Antigravity agents running with SkillsDB adhere to 8 core directives:
 
 ## Evolution & Generational Milestones
 
-SkillsDB has evolved across seven major engineering generations:
+SkillsDB has evolved across eight major engineering generations:
 
 ```mermaid
 flowchart LR
@@ -418,14 +423,16 @@ flowchart LR
     V4["SkillsDB v3.1\n(Architecture Fusion)\nTask State Machine\nAuto-Compaction & CWD Scope\n31 Unit Tests"]
     V5["SkillsDB v3.2\n(OpenAI Primitives Fusion)\nGuardrails & Auto-Fix\nAgent Handoff Protocol\nMemory Tombstoning\n36 Unit Tests"]
     V6["SkillsDB v3.3\n(Quad-AI Frontier Fusion)\nNative MCP Server (stdio)\nCodestral FIM Slicing\nAgent Templates Catalog\n41 Unit Tests"]
-    V7["SkillsDB v3.5\n(Autonomous Gitea Memory)\nSelf-Hosted Gitea Integration\nCoupled Git Milestones\nAuto-Start Daemon\n55 Unit Tests"]
+    V7["SkillsDB v3.4\n(Cognitive Guardrails)\nTurn-1 Priming Bulletin\nPreTool Hard Gatekeeper\n48 Unit Tests"]
+    V8["SkillsDB v3.5\n(Autonomous Gitea Memory)\nSelf-Hosted Gitea Integration\nCoupled Git Milestones\nAuto-Start Daemon\n55 Unit Tests"]
 
     V1 -->|"Added memory & micro-skills"| V2
     V2 -->|"Added modularity & lock-free swarm"| V3
     V3 -->|"Added task state & auto-compaction"| V4
     V4 -->|"Added guardrails, handoffs & tombstoning"| V5
     V5 -->|"Added MCP, FIM & templates"| V6
-    V6 -->|"Added Gitea code memory & git coupling"| V7
+    V6 -->|"Added cognitive priming & gatekeeper"| V7
+    V7 -->|"Added Gitea code memory & git coupling"| V8
 ```
 
 ---
