@@ -22,6 +22,8 @@ from skillsdb.platform.gitea import (
     init_gitea_workspace,
     sync_to_gitea,
     ensure_gitignore,
+    find_gitea_executable,
+    start_gitea_server,
 )
 from skillsdb.memory.project_memory import (
     init_project_db,
@@ -149,6 +151,12 @@ class TestGiteaIntegration(unittest.TestCase):
         # Calling again should not overwrite
         created_again = ensure_gitignore(proj_dir)
         self.assertFalse(created_again)
+
+    def test_find_gitea_executable(self):
+        exe = find_gitea_executable()
+        self.assertIsNotNone(exe)
+        self.assertTrue(exe.is_file())
+        self.assertIn("gitea", exe.name.lower())
 
 
 if __name__ == "__main__":

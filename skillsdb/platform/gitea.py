@@ -89,17 +89,106 @@ def _api_request(
         return 0, {"error": str(exc)}
 
 
-def check_gitea_connection(timeout: float = 3.0) -> Dict[str, Any]:
+DEFAULT_GITEA_SEARCH_DIRS = [
+    Path(r"D:\Apps\Gitea"),
+    Path(r"C:\Apps\Gitea"),
+    Path(r"C:\Gitea"),
+    Path.home() / "Gitea",
+    Path.home() / "AppData" / "Local" / "Programs" / "Gitea",
+]
+
+
+def find_gitea_executable() -> Optional[Path]:
+    """
+    Locates the Gitea executable binary on the local system.
+    """
+    custom_path = os.environ.get("GITEA_EXE")
+    if custom_path and Path(custom_path).is_file():
+        return Path(custom_path).resolve()
+
+    # Search standard installation and application directories
+    for search_dir in DEFAULT_GITEA_SEARCH_DIRS:
+        if search_dir.exists() and search_dir.is_dir():
+            matches = list(search_dir.glob("gitea*.exe"))
+            if matches:
+                exact = [m for m in matches if m.name.lower() == "gitea.exe"]
+                if exact:
+                    return exact[0].resolve()
+                return sorted(matches, key=lambda p: p.stat().st_mtime, reverse=True)[0].resolve()
+
+    which_gitea = shutil.which("gitea")
+    if which_gitea:
+        return Path(which_gitea).resolve()
+
+    return None
+
+
+def start_gitea_server(wait_seconds: float = 8.0) -> bool:
+    """
+    Autonomously starts the local Gitea instance in the background if it is not already running.
+    Returns True if the server becomes healthy and reachable, False otherwise.
+    """
+    # 1. Quick check if already running
+    pre_check = check_gitea_connection(timeout=1.0, auto_start=False)
+    if pre_check.get("connected"):
+        return True
+
+    exe_path = find_gitea_executable()
+    if not exe_path:
+        return False
+
+    work_dir = exe_path.parent
+
+    # Launch detached without a console window on Windows
+    creationflags = 0
+    if sys.platform == "win32":
+        DETACHED_PROCESS = 0x00000008
+        CREATE_NO_WINDOW = 0x08000000
+        creationflags = DETACHED_PROCESS | CREATE_NO_WINDOW
+
+    try:
+        subprocess.Popen(
+            [str(exe_path), "web"],
+            cwd=str(work_dir),
+            creationflags=creationflags,
+            close_fds=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+        )
+    except Exception:
+        return False
+
+    # Poll until server is responding or timeout reached
+    start_time = time.time()
+    while time.time() - start_time < wait_seconds:
+        time.sleep(0.5)
+        post_check = check_gitea_connection(timeout=0.8, auto_start=False)
+        if post_check.get("connected"):
+            return True
+
+    return False
+
+
+def check_gitea_connection(timeout: float = 3.0, auto_start: bool = True) -> Dict[str, Any]:
     """
     Tests connectivity and authentication against the local Gitea instance.
+    If offline and auto_start is enabled, attempts to start the server autonomously.
     """
     config = get_gitea_config()
     status_code, data = _api_request("user", method="GET", timeout=timeout)
 
+    # If unreachable and auto_start allowed, attempt start
+    auto_started = False
+    if status_code != 200 and auto_start:
+        if start_gitea_server(wait_seconds=8.0):
+            auto_started = True
+            status_code, data = _api_request("user", method="GET", timeout=timeout)
+
     if status_code == 200 and isinstance(data, dict):
         version_code, version_data = _api_request("version", method="GET", timeout=timeout)
         version_str = version_data.get("version", "unknown") if isinstance(version_data, dict) else "unknown"
-        return {
+        res = {
             "connected": True,
             "url": config["url"],
             "version": version_str,
@@ -107,6 +196,10 @@ def check_gitea_connection(timeout: float = 3.0) -> Dict[str, Any]:
             "is_admin": data.get("is_admin", False),
             "email": data.get("email", ""),
         }
+        if auto_started:
+            res["auto_started"] = True
+        return res
+
     return {
         "connected": False,
         "url": config["url"],
@@ -382,6 +475,10 @@ def sync_to_gitea(
     if push:
         remote_url = get_remote_url(root, "origin")
         if remote_url:
+            # Ensure local Gitea instance is alive before pushing
+            if "localhost" in remote_url or "127.0.0.1" in remote_url:
+                check_gitea_connection(timeout=1.5, auto_start=True)
+
             current_branch = branch
             if not current_branch:
                 br_res = _run_git(["branch", "--show-current"], root)

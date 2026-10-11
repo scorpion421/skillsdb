@@ -11,6 +11,8 @@ from .gitea import (
     sync_to_gitea,
     get_gitea_config,
     ensure_gitignore,
+    find_gitea_executable,
+    start_gitea_server,
 )
 
 __all__ = [
@@ -23,4 +25,6 @@ __all__ = [
     "sync_to_gitea",
     "get_gitea_config",
     "ensure_gitignore",
+    "find_gitea_executable",
+    "start_gitea_server",
 ]
