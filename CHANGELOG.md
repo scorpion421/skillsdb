@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.5.0] - 2026-10-11
+
+### Autonomous Local Gitea Code Memory & Git Milestone Coupling
+
+This release bridges SkillsDB episodic project memory directly with local Git infrastructure through seamless Gitea integration. SkillsDB now provides autonomous code long-term memory, automatic milestone commit-and-push coupling, background daemon self-healing, and universal baseline `.gitignore` enforcement.
+
+#### Key Innovations in v3.5.0:
+1. **Autonomous Local Gitea Platform Integration (`skillsdb.platform.gitea`)**:
+   - Zero-external-dependency REST API client for local Gitea instances (`http://127.0.0.1:3000/api/v1`).
+   - Automated repository provisioning, remote configuration, and synchronized push operations.
+   - Built-in `skillsdb gitea status`, `skillsdb gitea init`, and `skillsdb gitea sync` CLI commands.
+2. **Episodic Milestone Git Coupling (`skillsdb mem-save-snapshot`)**:
+   - Every project milestone snapshot recorded via `mem-save-snapshot` automatically stages files, generates a standardized Git commit, and pushes to Gitea `origin/main`.
+   - Adds `git_commit_hash` column to `session_snapshots` in `.agents/memory.db` for bidirectional traceability between episodic memory and Git history.
+   - Includes `--no-git` and `--no-push` flags for isolated ad-hoc snapshot operations.
+3. **Autonomous Self-Healing Daemon**:
+   - `start_gitea_server()` and `find_gitea_executable()` auto-discover and launch the background Gitea Windows executable if the service is not running when needed.
+4. **Universal Baseline `.gitignore` Enforcement**:
+   - Automatically injects strict ignore directives for secrets (`.env`), virtual environments (`venv`, `node_modules`), build outputs (`dist`, `build`), and SQLite write-ahead locks (`*.db-wal`, `*.db-shm`, `.agents/memory.db*`) on repository initialization and synchronization.
+5. **Architectural Verification & Build Pipeline**:
+   - Fully recompiled standalone executable (`C:\Users\Claymore\.gemini\database\db_manager.py`) with all 55 unit tests passing cleanly.
+
+---
+
 ## [3.4.0] - 2026-10-06
 
 ### The Imperative Guardrails & Turn-1 Cognitive Priming Release (Cognitive Guardrail Bulletin, Language Boundary Invariants & Auto-Initializing Episodic Memory)
