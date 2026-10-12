@@ -8,27 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.6.0] - 2026-10-12
 
-### The Native Antigravity UI Extension & Visual Orchestration Sidecar
+### Headless Architecture Consolidation & Plugin Branding
 
-This release elevates SkillsDB from a headless engine into a visual, interactive command center for Google Antigravity. By introducing a native UI extension sidecar panel embedded directly into Antigravity's auxiliary side pane, developers now have zero-token real-time visibility into project tasks, architectural decisions, configuration facts, and Gitea code milestones.
+This release consolidates SkillsDB's strictly headless, zero-overhead architecture for Google Antigravity while introducing official plugin branding and asset manifests.
 
 #### Key Innovations in v3.6.0:
-1. **Native Antigravity Sidecar UI Extension (`plugin/sidecars/panel/`)**:
-   - Zero-dependency Node.js backend (`main.mjs`) employing built-in `node:sqlite` (`DatabaseSync`) for sub-millisecond data delivery.
-   - Embeds seamlessly into Antigravity's auxiliary side pane (`SIDECAR_UI_ENTRYPOINT_AUX_PANE`) in an isolated iframe.
-   - 100% theme-aware CSS utilizing host design tokens (`--background`, `--card`, `--foreground`, `--primary`, `--border`) across light and dark themes.
-2. **Four Specialized Real-Time Dashboard Panes**:
-   - **Live Task Board**: Segmented views (`All`, `In Progress`, `Pending`, `Completed`, `Blocked`) with priority badges, inline task creation, and 1-click agent prompt dispatching (`window.sidecar.agent.sendMessage`).
-   - **Architectural Decision Trail**: Chronological log of persistent project decisions with category tags and rationale.
-   - **Fact Vault & Tombstones**: Key-value configuration display with expandable historical tombstone audit trails.
-   - **Gitea Milestone Radar**: Live commit timeline with Git SHA tags, Gitea web links, and 1-click cryptographic rollback (`git reset --hard`).
-3. **Zero-Token Telemetry Consumption**:
-   - Operates entirely outside LLM context limits by reading `.agents/memory.db` directly in WAL query-only mode.
-   - Real-time background polling every 4.5 seconds delivers live updates without burning a single model token.
-4. **Resilient Dual-Host Runtime**:
-   - Executes natively inside Antigravity's sidecar supervisor and supports standalone browser execution on port 3333 for live development and debugging.
-5. **Comprehensive Test Suite & Build Verification**:
-   - Expanded test suite to 60 automated unit tests (100% passing) verifying manifest validity, logo assets, script bridges, and database schemas.
+1. **Official Plugin Branding & Asset Manifest (`plugin/assets/logo.svg`)**:
+   - Official SVG vector icon integrated into `plugin.json` for Antigravity plugin manager discovery.
+   - Dedicated validation test suite in `tests/test_plugin_manifest.py`.
+2. **Headless Zero-Overhead Architecture Consolidation**:
+   - Preserves 100% headless, zero-daemon, zero-port-binding execution with no unneeded processes.
+   - All state orchestration remains purely in WAL-mode SQLite (`.agents/memory.db`) and local Gitea Git milestone coupling.
+3. **Comprehensive Test Suite & Quality Verification**:
+   - 57 automated unit tests passing across all architectural modules (WAL connection pooling, lock-free WriterQueue, Gitea REST API, and plugin manifests).
 
 ---
 
