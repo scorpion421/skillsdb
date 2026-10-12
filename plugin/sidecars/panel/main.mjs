@@ -187,7 +187,7 @@ app.api('/api/tasks/add', (data) => {
   return { success: true, title, priority, status };
 });
 
-// POST /api/tasks/update: Change task status or priority
+// POST /api/tasks/update: Change task status, priority, title, or description
 app.api('/api/tasks/update', (data) => {
   const dbInfo = openProjectDb(data?.workspace);
   if (!dbInfo?.db) throw new Error('Project memory database not found');
@@ -198,17 +198,28 @@ app.api('/api/tasks/update', (data) => {
   const now = new Date().toISOString();
   const stmt = dbInfo.db.prepare(`
     UPDATE project_tasks
-    SET status = COALESCE(?, status),
+    SET title = COALESCE(?, title),
+        description = COALESCE(?, description),
+        status = COALESCE(?, status),
         priority = COALESCE(?, priority),
         updated_at = ?
     WHERE id = ?;
   `);
-  stmt.run(data.status ?? null, data.priority ?? null, now, id);
+  stmt.run(data.title ?? null, data.description ?? null, data.status ?? null, data.priority ?? null, now, id);
 
   return { success: true, id };
 });
 
-// POST /api/tasks/delete: Delete task
+// POST /api/tasks/clear-completed: Prune finished tasks
+app.api('/api/tasks/clear-completed', (data) => {
+  const dbInfo = openProjectDb(data?.workspace);
+  if (!dbInfo?.db) throw new Error('Project memory database not found');
+
+  const result = dbInfo.db.prepare("DELETE FROM project_tasks WHERE status = 'completed';").run();
+  return { success: true, count: result.changes };
+});
+
+// POST /api/tasks/delete: Delete single task
 app.api('/api/tasks/delete', (data) => {
   const dbInfo = openProjectDb(data?.workspace);
   if (!dbInfo?.db) throw new Error('Project memory database not found');
@@ -231,13 +242,34 @@ app.api('/api/decisions', (params) => {
       FROM project_decisions
       WHERE is_active = 1
       ORDER BY id DESC
-      LIMIT 40;
+      LIMIT 60;
     `);
     return { decisions: stmt.all() };
   } catch (err) {
     return { decisions: [], error: err.message };
   }
 }, 'GET');
+
+// POST /api/decisions/add: Record an architectural decision
+app.api('/api/decisions/add', (data) => {
+  const dbInfo = openProjectDb(data?.workspace);
+  if (!dbInfo?.db) throw new Error('Project memory database not found');
+
+  const title = String(data.title ?? '').trim();
+  const content = String(data.content ?? '').trim();
+  if (!title || !content) throw new Error('Title and content are required');
+
+  const category = String(data.category ?? 'architecture').trim().toLowerCase();
+  const now = new Date().toISOString();
+
+  const stmt = dbInfo.db.prepare(`
+    INSERT INTO project_decisions (title, content, category, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, 1, ?, ?);
+  `);
+  stmt.run(title, content, category, now, now);
+
+  return { success: true, title, category };
+});
 
 // GET /api/facts: Retrieve active facts and tombstoned history
 app.api('/api/facts', (params) => {
@@ -246,7 +278,7 @@ app.api('/api/facts', (params) => {
 
   try {
     const activeStmt = dbInfo.db.prepare(`
-      SELECT key, value, updated_at
+      SELECT id, key, value, updated_at
       FROM project_facts
       WHERE deprecated_at IS NULL
       ORDER BY key ASC;
@@ -255,13 +287,69 @@ app.api('/api/facts', (params) => {
       SELECT id, key, old_value, new_value, reason, created_at
       FROM fact_history
       ORDER BY id DESC
-      LIMIT 25;
+      LIMIT 30;
     `);
     return { facts: activeStmt.all(), history: historyStmt.all() };
   } catch (err) {
     return { facts: [], history: [], error: err.message };
   }
 }, 'GET');
+
+// POST /api/facts/save: Save or reconcile key-value fact
+app.api('/api/facts/save', (data) => {
+  const dbInfo = openProjectDb(data?.workspace);
+  if (!dbInfo?.db) throw new Error('Project memory database not found');
+
+  const key = String(data.key ?? '').trim();
+  const value = String(data.value ?? '').trim();
+  const reason = String(data.reason ?? 'Reconciled via UI').trim();
+  if (!key) throw new Error('Fact key cannot be empty');
+
+  const now = new Date().toISOString();
+  const existing = dbInfo.db.prepare('SELECT value FROM project_facts WHERE key = ? AND deprecated_at IS NULL;').get(key);
+
+  if (existing) {
+    dbInfo.db.prepare(`
+      INSERT INTO fact_history (key, old_value, new_value, reason, created_at)
+      VALUES (?, ?, ?, ?, ?);
+    `).run(key, existing.value, value, reason, now);
+
+    dbInfo.db.prepare(`
+      UPDATE project_facts SET value = ?, updated_at = ? WHERE key = ? AND deprecated_at IS NULL;
+    `).run(value, now, key);
+  } else {
+    dbInfo.db.prepare(`
+      INSERT INTO project_facts (key, value, updated_at) VALUES (?, ?, ?);
+    `).run(key, value, now);
+  }
+
+  return { success: true, key, value };
+});
+
+// POST /api/facts/deprecate: Tombstone a fact
+app.api('/api/facts/deprecate', (data) => {
+  const dbInfo = openProjectDb(data?.workspace);
+  if (!dbInfo?.db) throw new Error('Project memory database not found');
+
+  const key = String(data.key ?? '').trim();
+  const reason = String(data.reason ?? 'Deprecated via UI').trim();
+  if (!key) throw new Error('Fact key cannot be empty');
+
+  const now = new Date().toISOString();
+  const existing = dbInfo.db.prepare('SELECT value FROM project_facts WHERE key = ? AND deprecated_at IS NULL;').get(key);
+  if (!existing) throw new Error('Active fact not found');
+
+  dbInfo.db.prepare(`
+    INSERT INTO fact_history (key, old_value, new_value, reason, created_at)
+    VALUES (?, ?, ?, ?, ?);
+  `).run(key, existing.value, '(deprecated)', reason, now);
+
+  dbInfo.db.prepare(`
+    UPDATE project_facts SET deprecated_at = ?, updated_at = ? WHERE key = ? AND deprecated_at IS NULL;
+  `).run(now, now, key);
+
+  return { success: true, key };
+});
 
 // GET /api/milestones: Retrieve session snapshots with Git SHA coupling
 app.api('/api/milestones', (params) => {
@@ -273,7 +361,7 @@ app.api('/api/milestones', (params) => {
       SELECT id, conversation_id, summary, next_steps, files_touched, git_commit_hash, created_at
       FROM session_snapshots
       ORDER BY id DESC
-      LIMIT 25;
+      LIMIT 30;
     `);
     return { milestones: stmt.all() };
   } catch (err) {

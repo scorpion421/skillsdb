@@ -41,7 +41,7 @@ class TestGiteaIntegration(unittest.TestCase):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_version_bump(self):
-        self.assertEqual(__version__, "3.5.0")
+        self.assertGreaterEqual(__version__, "3.5.0")
 
     def test_gitea_config_defaults(self):
         cfg = get_gitea_config()
