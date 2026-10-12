@@ -12,7 +12,6 @@
 1. **System Prompt Bloat**: Eliminates tens of thousands of static plugin tokens injected into every turn.
 2. **Context Amnesia**: Persists tasks, architectural decisions, and configuration facts across session restarts.
 3. **Catastrophic Code Loss**: Couples episodic milestones directly with local Gitea Git infrastructure for sub-second, cryptographic rollback immunity.
-4. **Headless Blindness**: Embeds a native Antigravity UI Extension sidecar panel (`SIDECAR_UI_ENTRYPOINT_AUX_PANE`) for zero-token live task boards, decision trails, and Gitea milestone rollbacks.
 
 ---
 
@@ -168,8 +167,8 @@ SkillsDB is verified with 100% passing local automated unit tests across 7 dedic
 | `tests/test_v3_2_openai_fusion.py` | Formatting guardrails, auto-fix, agent handoffs, memory tombstoning | **Passing (5 tests)** |
 | `tests/test_v3_3_mistral_fusion.py` | MCP stdio server, Codestral FIM chunking, agent templates | **Passing (5 tests)** |
 | `tests/test_v3_5_gitea_integration.py` | Gitea REST API, auto-start daemon, repo provisioning, git coupling | **Passing (14 tests)** |
-| `tests/test_v3_6_ui_extension.py` | Antigravity sidecar manifests, logo assets, UI bridge, SQLite queries | **Passing (5 tests)** |
-| **Total Test Suite** | **Comprehensive end-to-end verification** | **60/60 Passing (100%)** |
+| `tests/test_plugin_manifest.py` | Plugin metadata, Antigravity integration, branding assets | **Passing (2 tests)** |
+| **Total Test Suite** | **Comprehensive end-to-end verification** | **57/57 Passing (100%)** |
 
 Run tests locally at any time:
 ```powershell
