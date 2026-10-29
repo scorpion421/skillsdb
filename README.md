@@ -1,11 +1,14 @@
 # SkillsDB: High-Performance Knowledge, Episodic Memory & Autonomous Code Infrastructure
 
-[![Version](https://img.shields.io/badge/version-3.6.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.6.1-blue.svg)](CHANGELOG.md)
 [![Tests](https://img.shields.io/badge/tests-60%2F60%20passing-brightgreen.svg)](tests/)
 [![Antigravity](https://img.shields.io/badge/compatible-Google%20Antigravity%202.0-orange.svg)](https://deepmind.google/)
 [![Database](https://img.shields.io/badge/database-SQLite3%20FTS5%20%7C%20WAL-lightgrey.svg)](https://www.sqlite.org/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-AGPLv3_%2B_Commons_Clause-blue.svg)](LICENSE)
+
+> [!IMPORTANT]
+> **Active Development & Unified Distribution (`AntiGraviton`)**: Standalone `SkillsDB` has been unified into the **[AntiGraviton Complete Suite (`scorpion421/AntiGraviton`)](https://github.com/scorpion421/AntiGraviton)** (currently bundling `SkillsDB v3.7.12+` and the local Gitea service).
 
 **SkillsDB** is a lightweight, zero-overhead knowledge indexing, episodic memory, and autonomous Git orchestration engine engineered for Google Antigravity and modern coding agents. It solves the fundamental failure modes of local AI development:
 
@@ -179,4 +182,9 @@ python -m unittest discover -s tests -v
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+Copyright (C) 2026 `scorpion421` (`MickyFoley` / `MoerthJ`).
+
+This project is licensed under the **[GNU Affero General Public License v3.0 (AGPL-3.0-only) with Commons Clause License Condition v1.0](LICENSE)** (`AGPL-3.0-only WITH Commons-Clause-1.0`).
+- Free to use, study, share, and modify with mandatory attribution to `scorpion421`.
+- Derivative works must be distributed in full source code form under the same license.
+- **Commercial Sale & Marketplace Resale Strictly Prohibited (Commons Clause v1.0)**: Repackaging, listing, or selling SkillsDB or any of its `SKILL.md` workflows, rules, or scripts for a fee on commercial marketplaces (such as Agensi.io or similar platforms) is strictly prohibited.

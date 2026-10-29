@@ -1,5 +1,7 @@
 {
   "name": "customizations-db",
   "description": "Centralized database integration for system rules, workflow skills, and project orchestration",
-  "logo": "assets/logo.svg"
+  "logo": "assets/logo.svg",
+  "license": "AGPL-3.0-only WITH Commons-Clause-1.0",
+  "version": "3.6.1"
 }

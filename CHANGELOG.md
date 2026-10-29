@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.6.1] - 2026-10-29
+
+### Changed
+- **Relicensed Under `GNU AGPL v3.0` with Commons Clause v1.0 (`LICENSE`, `README.md`, `plugin/plugin.json`)**:
+  - Replaced the permissive MIT license with the strict copyleft **GNU Affero General Public License v3.0 (`AGPL-3.0-only`)** combined with the **Commons Clause License Condition v1.0** (`AGPL-3.0-only WITH Commons-Clause-1.0`), requiring mandatory author attribution (`scorpion421`), full source code disclosure of derivatives, and strictly prohibiting commercial sale or third-party marketplace reselling of SkillsDB and its `SKILL.md` workflows.
+  - Added prominent reference in `README.md` to the unified successor distribution **[AntiGraviton](https://github.com/scorpion421/AntiGraviton)**.
+
+---
+
 ## [3.6.0] - 2026-10-12
 
 ### Headless Architecture Consolidation & Plugin Branding
