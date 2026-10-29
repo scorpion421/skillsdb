@@ -1,6 +1,6 @@
 # SkillsDB: High-Performance Knowledge, Episodic Memory & Autonomous Code Infrastructure
 
-[![Version](https://img.shields.io/badge/version-3.6.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.6.2-blue.svg)](CHANGELOG.md)
 [![Tests](https://img.shields.io/badge/tests-60%2F60%20passing-brightgreen.svg)](tests/)
 [![Antigravity](https://img.shields.io/badge/compatible-Google%20Antigravity%202.0-orange.svg)](https://deepmind.google/)
 [![Database](https://img.shields.io/badge/database-SQLite3%20FTS5%20%7C%20WAL-lightgrey.svg)](https://www.sqlite.org/)
@@ -8,13 +8,24 @@
 [![License](https://img.shields.io/badge/license-AGPLv3_%2B_Commons_Clause-blue.svg)](LICENSE)
 
 > [!IMPORTANT]
-> **Active Development & Unified Distribution (`AntiGraviton`)**: Standalone `SkillsDB` has been unified into the **[AntiGraviton Complete Suite (`scorpion421/AntiGraviton`)](https://github.com/scorpion421/AntiGraviton)** (currently bundling `SkillsDB v3.7.12+` and the local Gitea service).
+> **Active Development & Unified Distribution (`AntiGraviton`)**: Standalone `SkillsDB` has been unified into the **[AntiGraviton Complete Suite (`scorpion421/AntiGraviton`)](https://github.com/scorpion421/AntiGraviton)** (currently bundling `SkillsDB v3.7.14+` and the local Gitea service).
 
 **SkillsDB** is a lightweight, zero-overhead knowledge indexing, episodic memory, and autonomous Git orchestration engine engineered for Google Antigravity and modern coding agents. It solves the fundamental failure modes of local AI development:
 
 1. **System Prompt Bloat**: Eliminates tens of thousands of static plugin tokens injected into every turn.
 2. **Context Amnesia**: Persists tasks, architectural decisions, and configuration facts across session restarts.
 3. **Catastrophic Code Loss**: Couples episodic milestones directly with local Gitea Git infrastructure for sub-second, cryptographic rollback immunity.
+
+---
+
+## Table of contents
+
+1. [Verified production impact: without vs. with SkillsDB](#verified-production-impact-without-vs-with-skillsdb)
+2. [Visual benchmarks](#visual-benchmarks)
+3. [System architecture](#system-architecture)
+4. [Quick start (30 seconds)](#quick-start-30-seconds)
+5. [Verification & verified test suite](#verification--verified-test-suite-6060-passing)
+6. [License](#license)
 
 ---
 

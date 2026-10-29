@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.6.2] - 2026-10-29
+
+### Added
+- **Clickable `Table of contents` Section in `README.md` (`README.md`, `plugin/plugin.json`)**:
+  - Added a `## Table of contents` section with clickable Markdown section anchors following the standardized 9-block `README.md` blueprint.
+
+---
+
 ## [3.6.1] - 2026-10-29
 
 ### Changed
